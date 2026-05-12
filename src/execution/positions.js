@@ -178,6 +178,11 @@ export async function refreshPosition(position, { autoExit = true, jupiterPnl = 
     WHERE id = ?
   `).run(highWaterMcap, highWaterPrice, trailingArmed ? 1 : 0, position.id);
 
+  db.prepare(`
+    INSERT INTO position_snapshots (position_id, at_ms, price, mcap, unrealized_pnl_percent, unrealized_pnl_sol, high_water_mcap, trailing_armed)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(position.id, now(), price, mcap, pnlPercent, pnlSol, highWaterMcap, trailingArmed ? 1 : 0);
+
   if (exitReason && autoExit && position.execution_mode === 'live') {
     if (sellInProgress.has(position.id)) return { ...position, exitReason: null };
     sellInProgress.add(position.id);
