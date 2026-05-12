@@ -387,6 +387,117 @@ export function initDb() {
     use_llm: false,
     llm_min_confidence: 0,
   }), ts);
+
+  // ── Experimental strategies added 2026-05-13 — seeded disabled.
+  // User flips one on via /menu after reviewing. Each codifies a
+  // different hypothesis about what's losing money in dry-run.
+
+  // sniper_tight: smaller bites, faster takes. Hypothesis — Pump.fun
+  // pumps mean-revert within 30 min; lock 50% at +20%, exit fast.
+  stratInsert.run('sniper_tight', 'Sniper (Tight)', 0, JSON.stringify({
+    entry_mode: 'immediate',
+    min_source_count: 2,
+    require_fee_claim: true,
+    token_age_max_ms: 3600000,
+    min_mcap_usd: 7000,
+    max_mcap_usd: 200000,
+    min_fee_claim_sol: 0.5,
+    min_gmgn_total_fee_sol: 10,
+    min_holders: 0,
+    max_top20_holder_percent: 100,
+    min_saved_wallet_holders: 0,
+    max_ath_distance_pct: 0,
+    min_graduated_volume_usd: 0,
+    trending_min_volume_usd: 0,
+    trending_min_swaps: 0,
+    trending_max_rug_ratio: 0.3,
+    trending_max_bundler_rate: 0.5,
+    position_size_sol: 0.1,
+    max_open_positions: 3,
+    tp_percent: 40,
+    sl_percent: -15,
+    trailing_enabled: true,
+    trailing_percent: 10,
+    partial_tp: true,
+    partial_tp_at_percent: 20,
+    partial_tp_sell_percent: 50,
+    max_hold_ms: 1200000,
+    mint_cooldown_ms: 3600000,
+    use_llm: true,
+    llm_min_confidence: 55,
+  }), ts);
+
+  // sniper_runner: only enter on high-conviction signals; ride them
+  // with looser trailing. Hypothesis — fewer trades, bigger winners.
+  // Demands 3 signal sources AND the LLM to pass a higher bar.
+  stratInsert.run('sniper_runner', 'Sniper (Runner)', 0, JSON.stringify({
+    entry_mode: 'immediate',
+    min_source_count: 3,
+    require_fee_claim: true,
+    token_age_max_ms: 3600000,
+    min_mcap_usd: 7000,
+    max_mcap_usd: 250000,
+    min_fee_claim_sol: 1,
+    min_gmgn_total_fee_sol: 15,
+    min_holders: 50,
+    max_top20_holder_percent: 60,
+    min_saved_wallet_holders: 0,
+    max_ath_distance_pct: 0,
+    min_graduated_volume_usd: 0,
+    trending_min_volume_usd: 5000,
+    trending_min_swaps: 50,
+    trending_max_rug_ratio: 0.2,
+    trending_max_bundler_rate: 0.4,
+    position_size_sol: 0.1,
+    max_open_positions: 2,
+    tp_percent: 100,
+    sl_percent: -20,
+    trailing_enabled: true,
+    trailing_percent: 25,
+    partial_tp: true,
+    partial_tp_at_percent: 50,
+    partial_tp_sell_percent: 30,
+    max_hold_ms: 3600000,
+    mint_cooldown_ms: 3600000,
+    use_llm: true,
+    llm_min_confidence: 75,
+  }), ts);
+
+  // sniper_safe: paranoid filters, tiny SL. Hypothesis — most losses
+  // come from low-quality signals where the LLM gets fooled.
+  // Tightens holder concentration cap and demands real volume.
+  stratInsert.run('sniper_safe', 'Sniper (Safe)', 0, JSON.stringify({
+    entry_mode: 'immediate',
+    min_source_count: 3,
+    require_fee_claim: true,
+    token_age_max_ms: 3600000,
+    min_mcap_usd: 15000,
+    max_mcap_usd: 150000,
+    min_fee_claim_sol: 1,
+    min_gmgn_total_fee_sol: 15,
+    min_holders: 100,
+    max_top20_holder_percent: 50,
+    min_saved_wallet_holders: 0,
+    max_ath_distance_pct: 0,
+    min_graduated_volume_usd: 0,
+    trending_min_volume_usd: 10000,
+    trending_min_swaps: 100,
+    trending_max_rug_ratio: 0.15,
+    trending_max_bundler_rate: 0.3,
+    position_size_sol: 0.05,
+    max_open_positions: 2,
+    tp_percent: 35,
+    sl_percent: -12,
+    trailing_enabled: true,
+    trailing_percent: 12,
+    partial_tp: true,
+    partial_tp_at_percent: 20,
+    partial_tp_sell_percent: 50,
+    max_hold_ms: 1800000,
+    mint_cooldown_ms: 3600000,
+    use_llm: true,
+    llm_min_confidence: 65,
+  }), ts);
 }
 
 export function ensureColumn(table, column, ddl) {
