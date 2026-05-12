@@ -259,3 +259,33 @@ LLM threshold or signal quality bound, not the strategy edits.
 
 Conclusion: bot healthy, infrastructure changes appearing in the data,
 ready for morning deployment.
+
+**2026-05-13 02:50 UTC** — second confirmation cycle. Bot healthy, 27h
+uptime, no crashes. Five LLM timeouts in the gap (cosmetic — that's the
+~25-30% MiniMax timeout rate we already knew about).
+
+**New: Position #11 COMPUTE.** Opened 19:37:48, closed 19:45:40, 8-min
+hold, **+34.30% via TRAILING_TP**. This is a clean trailing-stop win
+without max_hold luck — second TRAILING_TP exit in the dataset.
+
+Updated aggregate (11 closes, no open positions):
+
+| Exit reason | N | Avg P&L | Net SOL |
+|---|---|---|---|
+| SL | 6 | -24.58% | -0.1475 |
+| MAX_HOLD | 3 | +18.68% | +0.0560 |
+| TRAILING_TP | 2 | +38.30% | +0.0766 |
+| **TOTAL** | **11** | **-1.35%** | **-0.0149** |
+
+Win rate **27.3% (3/11)**, up from 14.3% pre-edits. ROC trajectory:
+**-11.7% → -4.92% → -1.35%** across the last three checks. Approaching
+break-even.
+
+Caveat: still N=11, two of three wins overlap with high-variance outliers
+(`https` +58% and COMPUTE +34%). But: TRAILING_TP now has two
+data-points and both are big wins, which is what a trend-following
+trailing stop is supposed to produce. The infrastructure is working as
+designed; entry quality remains the limit.
+
+Loop stop condition met (≥2 clean cycles, no crashes, no broken
+behavior). Stopping autonomous loop.
