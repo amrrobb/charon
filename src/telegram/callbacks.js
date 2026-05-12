@@ -106,6 +106,9 @@ export async function handleCallback(query) {
       return;
     }
     const positionId = await createDryRunPosition(row.id, candidate, decision, 'manual_buy');
+    if (!positionId) {
+      return bot.sendMessage(chatId, 'Skipped: mint is in cooldown after recent exit.');
+    }
     logDecisionEvent({
       batchId: 'manual',
       triggerCandidateId: row.id,

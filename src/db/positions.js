@@ -26,6 +26,17 @@ export function allPositions(limit = 10) {
   return db.prepare('SELECT * FROM dry_run_positions ORDER BY id DESC LIMIT ?').all(limit);
 }
 
+export function mintCooldownRemainingMs(mint, cooldownMs) {
+  if (!cooldownMs || cooldownMs <= 0) return 0;
+  const row = db.prepare(`
+    SELECT MAX(closed_at_ms) AS last_close FROM dry_run_positions
+    WHERE mint = ? AND status = 'closed' AND closed_at_ms IS NOT NULL
+  `).get(mint);
+  if (!row?.last_close) return 0;
+  const elapsed = now() - Number(row.last_close);
+  return Math.max(0, Number(cooldownMs) - elapsed);
+}
+
 export function createDryRunPosition(candidateId, candidate, decision, reason = 'llm_buy') {
   const strat = activeStrategy();
   const sizeSol = strat.position_size_sol ?? numSetting('dry_run_buy_sol', 0.1);
@@ -35,6 +46,12 @@ export function createDryRunPosition(candidateId, candidate, decision, reason = 
   const sl = Number(decision.suggested_sl_percent || strat.sl_percent || numSetting('default_sl_percent', -25));
   const trailingEnabled = (strat.trailing_enabled ?? boolSetting('default_trailing_enabled', true)) ? 1 : 0;
   const trailingPercent = strat.trailing_percent ?? numSetting('default_trailing_percent', 20);
+  const cooldownMs = strat.mint_cooldown_ms ?? numSetting('mint_cooldown_ms', 0);
+  const remaining = mintCooldownRemainingMs(candidate.token.mint, cooldownMs);
+  if (remaining > 0) {
+    console.log(`[positions] mint ${candidate.token.mint.slice(0,8)}... cooldown ${Math.round(remaining/1000)}s remaining`);
+    return null;
+  }
 
   return db.transaction(() => {
     const existing = db.prepare(`

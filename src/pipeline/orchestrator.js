@@ -152,6 +152,19 @@ export async function handleApprovedBuy(selectedRow, decision, batchId, rows = [
 
   if (mode === 'dry_run') {
     const positionId = await createDryRunPosition(freshSelectedRow.id, freshSelectedRow.candidate, decision, `llm_batch_${batchId}`);
+    if (!positionId) {
+      logDecisionEvent({
+        batchId,
+        triggerCandidateId,
+        selectedRow: freshSelectedRow,
+        rows: executionRows,
+        decision,
+        mode,
+        action: 'entry_skipped_cooldown',
+        guardrails: { mintCooldownActive: true },
+      });
+      return;
+    }
     logDecisionEvent({
       batchId,
       triggerCandidateId,
