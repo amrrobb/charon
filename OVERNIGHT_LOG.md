@@ -226,3 +226,36 @@ MAX_HOLD` at -1.16%. KNIGHT opened ~14h after I applied the Tier 1 SQLite
 edit, so it picked up the new `max_hold_ms = 1800000` (30 min). The
 peak-without-exit-then-bleed-to-SL pattern that hurt ASTROID (-20.7%) is
 now capped. Tier 1 worked.
+
+**2026-05-13 02:03 UTC** — pm2 healthy, 27h uptime. Two new closes since
+the last check:
+
+- **#9 "https": MAX_HOLD at +58.52% / +0.0585 SOL.** The literally-named-`https`
+  token rode +58% in its 30-min window. Notable: this is *exactly* the token
+  the new junk filter (commit `46fd232`) would have rejected pre-LLM. After
+  the deploy, this category of win goes away — but so does the much larger
+  population of `https`-grade losers we haven't yet sampled. Net expectation
+  is positive but cannot be proven on N=1.
+- **#10 "Dog": MAX_HOLD at -1.32%.** Tiny loss; max_hold prevented bleed.
+
+Updated aggregate (10 closes, no open positions):
+
+| Exit reason | N | Avg P&L | Net SOL |
+|---|---|---|---|
+| SL | 6 | -24.58% | -0.1475 |
+| MAX_HOLD | 3 | +18.68% | +0.0560 |
+| TRAILING_TP | 1 | +42.30% | +0.0423 |
+| **TOTAL** | **10** | **-4.92%** | **-0.0492** |
+
+Win rate 20% (2/10). ROC improved from -11.7% to -4.92% — partly real
+infrastructure gain (MAX_HOLD shifted slow-bleed losers to small losers),
+partly the `https` outlier. **MAX_HOLD avg without https is ~-1.2%** —
+still meaningfully better than SL's -24.58%.
+
+Two LLM timeouts (20:22, 20:41) and one twitter 404 (cosmetic). No
+crashes. Decision funnel last 45 min: 1 BUY / 9 PASS / 9 WATCH. 1
+`entry_rejected_fresh_filters` (existing logic working). 0 new entries —
+LLM threshold or signal quality bound, not the strategy edits.
+
+Conclusion: bot healthy, infrastructure changes appearing in the data,
+ready for morning deployment.
