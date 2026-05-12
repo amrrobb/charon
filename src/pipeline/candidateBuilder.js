@@ -27,9 +27,40 @@ export function signalLabel(signals = {}) {
   ].filter(Boolean).join(' + ') || signals.route || 'unknown';
 }
 
+const JUNK_SYMBOL_PATTERNS = [/^https?$/i, /^www$/i, /^ftp$/i, /^null$/i, /^undefined$/i];
+const JUNK_NAME_PATTERNS = [
+  /take\s*profits?/i,
+  /\bselling\b/i,
+  /\bdump(ing|ed)?\b/i,
+  /\brug(ged|ging)?\b/i,
+  /\bscam\b/i,
+  /\bhoneypot\b/i,
+  /exit\s*liquidity/i,
+];
+
+export function junkTokenReason(token) {
+  if (!token) return null;
+  const symbol = String(token.symbol || '').trim();
+  const name = String(token.name || '').trim();
+  if (!symbol) return null;
+  if (symbol.length < 2) return `symbol too short: "${symbol}"`;
+  if (symbol.includes('.com') || symbol.includes('://')) return `symbol looks like URL: "${symbol}"`;
+  for (const pat of JUNK_SYMBOL_PATTERNS) {
+    if (pat.test(symbol)) return `junk symbol: "${symbol}"`;
+  }
+  for (const pat of JUNK_NAME_PATTERNS) {
+    if (pat.test(name)) return `name suggests exit signal: "${name}"`;
+  }
+  return null;
+}
+
 export function filterCandidate(candidate) {
   const strat = activeStrategy();
   const failures = [];
+
+  const junk = junkTokenReason(candidate.token);
+  if (junk) failures.push(`name/symbol: ${junk}`);
+
   const mcap = candidate.metrics.marketCapUsd;
   const totalFees = candidate.metrics.gmgnTotalFeesSol;
   const gradVolume = candidate.metrics.graduatedVolumeUsd;
