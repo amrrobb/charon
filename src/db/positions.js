@@ -42,8 +42,18 @@ export function createDryRunPosition(candidateId, candidate, decision, reason = 
   const sizeSol = strat.position_size_sol ?? numSetting('dry_run_buy_sol', 0.1);
   const entryPrice = Number(candidate.metrics.priceUsd || 0) || null;
   const entryMcap = Number(candidate.metrics.marketCapUsd || candidate.metrics.graduatedMarketCapUsd || 0) || null;
-  const tp = Number(decision.suggested_tp_percent || strat.tp_percent || numSetting('default_tp_percent', 50));
-  const sl = Number(decision.suggested_sl_percent || strat.sl_percent || numSetting('default_sl_percent', -25));
+  // Default behaviour: strategy TP/SL/trailing is authoritative. The LLM's
+  // suggested_tp_percent / suggested_sl_percent are advisory only and were
+  // observed to consistently override strategy edits (all 9 dry-run positions
+  // used the LLM-suggested values, defeating manual strategy tuning).
+  // Set strat.allow_llm_tp_sl_override = true to restore the old behaviour.
+  const allowLlmOverride = Boolean(strat.allow_llm_tp_sl_override);
+  const tp = allowLlmOverride
+    ? Number(decision.suggested_tp_percent || strat.tp_percent || numSetting('default_tp_percent', 50))
+    : Number(strat.tp_percent ?? decision.suggested_tp_percent ?? numSetting('default_tp_percent', 50));
+  const sl = allowLlmOverride
+    ? Number(decision.suggested_sl_percent || strat.sl_percent || numSetting('default_sl_percent', -25))
+    : Number(strat.sl_percent ?? decision.suggested_sl_percent ?? numSetting('default_sl_percent', -25));
   const trailingEnabled = (strat.trailing_enabled ?? boolSetting('default_trailing_enabled', true)) ? 1 : 0;
   const trailingPercent = strat.trailing_percent ?? numSetting('default_trailing_percent', 20);
   const cooldownMs = strat.mint_cooldown_ms ?? numSetting('mint_cooldown_ms', 0);
@@ -102,8 +112,13 @@ export function createLivePosition(candidateId, candidate, decision, swap, reaso
   const sizeSol = strat.position_size_sol ?? numSetting('dry_run_buy_sol', 0.1);
   const entryPrice = Number(candidate.metrics.priceUsd || 0) || null;
   const entryMcap = Number(candidate.metrics.marketCapUsd || candidate.metrics.graduatedMarketCapUsd || 0) || null;
-  const tp = Number(decision.suggested_tp_percent || strat.tp_percent || numSetting('default_tp_percent', 50));
-  const sl = Number(decision.suggested_sl_percent || strat.sl_percent || numSetting('default_sl_percent', -25));
+  const allowLlmOverride = Boolean(strat.allow_llm_tp_sl_override);
+  const tp = allowLlmOverride
+    ? Number(decision.suggested_tp_percent || strat.tp_percent || numSetting('default_tp_percent', 50))
+    : Number(strat.tp_percent ?? decision.suggested_tp_percent ?? numSetting('default_tp_percent', 50));
+  const sl = allowLlmOverride
+    ? Number(decision.suggested_sl_percent || strat.sl_percent || numSetting('default_sl_percent', -25))
+    : Number(strat.sl_percent ?? decision.suggested_sl_percent ?? numSetting('default_sl_percent', -25));
   const trailingEnabled = (strat.trailing_enabled ?? boolSetting('default_trailing_enabled', true)) ? 1 : 0;
   const trailingPercent = strat.trailing_percent ?? numSetting('default_trailing_percent', 20);
 
