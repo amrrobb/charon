@@ -12,6 +12,44 @@
 
 ---
 
+## Self-review of overnight commits (added during morning cold-read)
+
+Reviewed the diff cold. Findings ordered by concern:
+
+**1. Junk filter applies to the existing sniper strategy on deploy.**
+The new `junkTokenReason` runs inside `filterCandidate()` for *every*
+candidate regardless of active strategy. Concrete effect: the `https`
+token (which gave us +58% via MAX_HOLD) would be rejected pre-LLM.
+Most `https`-grade tokens would lose, but this one didn't. **You are
+giving up that distribution's positive outliers in exchange for
+eliminating the negative ones.** Worth knowing.
+
+**2. Existing closed positions (1-17) have NO snapshot rows.**
+Snapshot data only accumulates from deploy forward. Any SQL joining
+`position_snapshots` to historical positions will return zero rows.
+Future analysis depends entirely on post-deploy data. Not a bug —
+just a horizon to keep in mind.
+
+**3. Cooldown stays disabled on the existing sniper strategy.**
+I added `mint_cooldown_ms` to the new alt strategies but did NOT
+mutate your existing sniper row (per advisor's "don't pollute
+running config" rule). So if you keep running sniper post-deploy,
+mint cooldown is OFF and the BIRDCLAW round-trip pattern can recur.
+To turn it on: SQLite UPDATE setting `mint_cooldown_ms: 3600000` on
+the sniper row, or switch to one of the alt strategies which all
+have it set.
+
+**4. Pre-cooldown HTTP cost.** The cooldown check runs *after* the
+fresh-execution Jupiter refresh in orchestrator.js. Every blocked
+entry costs one extra Jupiter API call. Not a bug, marginal cost.
+
+**5. Snapshot INSERT writes NULL price when Jupiter has no data.**
+The column allows NULL, so safe. Just means some snapshots will have
+`price = NULL` but valid `mcap` (since mcap drives the early-return
+guard, not price).
+
+**No blocking bugs found.** Deploy is safe.
+
 ## Deferred questions for morning review
 
 1. **Pick a strategy to A/B test.** Three new strategies seeded (disabled):
