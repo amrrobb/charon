@@ -19,7 +19,12 @@ export function normalizeDecision(parsed, fallbackReason = '') {
   };
 }
 
-export function activeLessonsForPrompt(limit = 6) {
+// Lessons can create a self-reinforcing bias loop: LLM generates a rule
+// from N=5 trades, the rule then prevents trades that would disprove it.
+// Default cap is 3 (was 6); set LLM_LESSON_LIMIT to override. Set to 0
+// to disable lesson injection entirely.
+export function activeLessonsForPrompt(limit = Number(process.env.LLM_LESSON_LIMIT ?? 3)) {
+  if (limit <= 0) return [];
   return db.prepare(`
     SELECT lesson
     FROM learning_lessons
