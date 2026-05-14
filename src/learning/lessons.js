@@ -43,7 +43,7 @@ export async function generateLessons(summary) {
     const res = await axios.post(`${LLM_BASE_URL.replace(/\/$/, '')}/chat/completions`, {
       model: LLM_MODEL,
       temperature: 0.1,
-      max_tokens: 800,
+      max_tokens: 1500,
       response_format: { type: 'json_object' },
       messages: [
         {

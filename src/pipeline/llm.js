@@ -66,6 +66,19 @@ export function compactCandidateForLlm(row) {
 }
 
 export async function decideCandidateBatch(rows, triggerCandidateId) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return {
+      verdict: 'PASS',
+      confidence: 0,
+      selected_candidate_id: null,
+      selected_mint: null,
+      reason: 'empty_candidate_batch_skipped',
+      risks: ['no_candidates_to_evaluate'],
+      suggested_tp_percent: numSetting('default_tp_percent', 50),
+      suggested_sl_percent: numSetting('default_sl_percent', -25),
+      raw: null,
+    };
+  }
   if (!ENABLE_LLM || !LLM_API_KEY) {
     return {
       verdict: 'WATCH',
@@ -113,7 +126,7 @@ export async function decideCandidateBatch(rows, triggerCandidateId) {
     const res = await axios.post(`${LLM_BASE_URL.replace(/\/$/, '')}/chat/completions`, {
       model: LLM_MODEL,
       temperature: 0.2,
-      max_tokens: 600,
+      max_tokens: 1200,
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: system },
