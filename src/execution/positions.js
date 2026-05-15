@@ -136,8 +136,48 @@ export async function refreshPosition(position, { autoExit = true, jupiterPnl = 
     exitReason = 'MAX_HOLD';
   }
 
-  // Partial TP check
-  if (!exitReason && strat?.partial_tp && !position.partial_tp_done && pnlPercent >= strat.partial_tp_at_percent) {
+  // Multi-tier TP ladder. When strat.tp_ladder_pct = [50, 100, 200, 350, 500]
+  // each entry is a P&L% threshold. tp_ladder_sell_pct holds the matching
+  // sell percentage (of remaining position) at each rung. Ladder takes
+  // priority over the legacy single-tier partial_tp; if ladder is missing
+  // or empty the original partial_tp_* block below still fires.
+  const ladder = Array.isArray(strat?.tp_ladder_pct) ? strat.tp_ladder_pct : [];
+  const ladderSells = Array.isArray(strat?.tp_ladder_sell_pct) ? strat.tp_ladder_sell_pct : [];
+  if (!exitReason && ladder.length > 0) {
+    const tierHits = Number(position.tp_tier_hits || 0);
+    // Find highest tier whose threshold the current pnl has crossed, that
+    // we haven't yet recorded as hit.
+    let nextTier = tierHits;
+    while (nextTier < ladder.length && pnlPercent >= Number(ladder[nextTier])) {
+      nextTier += 1;
+    }
+    if (nextTier > tierHits) {
+      const sellPct = Number(ladderSells[nextTier - 1] ?? ladderSells[0] ?? 50);
+      db.prepare('UPDATE dry_run_positions SET tp_tier_hits = ? WHERE id = ?').run(nextTier, position.id);
+      console.log(`[position] ${position.id} TIER_TP tier ${nextTier}/${ladder.length} at ${pnlPercent.toFixed(1)}% (sell ${sellPct}% of remaining)`);
+      db.prepare(`
+        INSERT INTO dry_run_trades (position_id, mint, side, at_ms, price, mcap, size_sol, token_amount_est, reason, payload_json)
+        VALUES (?, ?, 'sell', ?, ?, ?, ?, ?, ?, ?)
+      `).run(position.id, position.mint, now(), price, mcap,
+        position.size_sol * (sellPct / 100), null, `TIER_TP_${nextTier}`,
+        json({ pnlPercent, tier: nextTier, threshold: ladder[nextTier - 1], sellPct }));
+      if (position.execution_mode === 'live' && position.token_amount_raw) {
+        try {
+          const sellAmount = Math.floor(Number(position.token_amount_raw) * (sellPct / 100));
+          if (sellAmount > 0) {
+            const sell = await executeLiveSell({ ...position, token_amount_raw: String(sellAmount) }, `TIER_TP_${nextTier}`);
+            const remaining = Number(position.token_amount_raw) - sellAmount;
+            db.prepare('UPDATE dry_run_positions SET token_amount_raw = ? WHERE id = ?').run(String(remaining), position.id);
+          }
+        } catch (err) {
+          console.log(`[position] ${position.id} tier ${nextTier} sell failed: ${err.message}`);
+        }
+      }
+    }
+  }
+
+  // Partial TP check (legacy single-tier; only fires if ladder not configured)
+  if (!exitReason && ladder.length === 0 && strat?.partial_tp && !position.partial_tp_done && pnlPercent >= strat.partial_tp_at_percent) {
     db.prepare('UPDATE dry_run_positions SET partial_tp_done = 1 WHERE id = ?').run(position.id);
     console.log(`[position] ${position.id} partial TP at ${pnlPercent.toFixed(1)}% (${strat.partial_tp_sell_percent}% sell)`);
     if (position.execution_mode === 'live' && position.token_amount_raw) {

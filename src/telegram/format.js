@@ -102,6 +102,25 @@ export function formatPosition(position) {
     : position.entry_mcap && position.high_water_mcap
       ? (Number(position.high_water_mcap) / Number(position.entry_mcap) - 1) * 100
       : 0;
+  let ladderLine = null;
+  let tierLine = null;
+  if (position.strategy_config_json) {
+    try {
+      const cfg = JSON.parse(position.strategy_config_json);
+      const ladder = Array.isArray(cfg.tp_ladder_pct) ? cfg.tp_ladder_pct : null;
+      if (ladder && ladder.length > 0) {
+        const tiers = ladder.map(p => `${p}%`).join(' ▸ ');
+        ladderLine = `TP ladder: ${tiers} · SL: ${fmtPct(position.sl_percent)}`;
+        const hits = Number(position.tp_tier_hits || 0);
+        if (hits > 0) {
+          const lastThreshold = ladder[hits - 1];
+          tierLine = `✅ TP hit: ${hits}/${ladder.length} (last +${lastThreshold}%)`;
+        } else {
+          tierLine = `⏳ TP: belum ada`;
+        }
+      }
+    } catch {}
+  }
   return [
     `📍 <b>${escapeHtml(position.symbol || short(position.mint))}</b> #${position.id}`,
     `Token: <a href="${gmgnLink(position.mint)}">${short(position.mint)}</a>`,
@@ -109,7 +128,8 @@ export function formatPosition(position) {
     position.entry_signature ? `Entry TX: <a href="${txLink(position.entry_signature)}">${short(position.entry_signature)}</a>` : null,
     `Entry mcap: ${fmtUsd(position.entry_mcap)} · High: ${fmtUsd(position.high_water_mcap)}`,
     `Size: ${fmtSol(position.size_sol)} SOL · PnL: ${fmtPct(pnl)}`,
-    `TP: ${fmtPct(position.tp_percent)} · SL: ${fmtPct(position.sl_percent)} · Trail: ${position.trailing_enabled ? `${fmtPct(position.trailing_percent)}` : 'off'}`,
+    ladderLine || `TP: ${fmtPct(position.tp_percent)} · SL: ${fmtPct(position.sl_percent)} · Trail: ${position.trailing_enabled ? `${fmtPct(position.trailing_percent)}` : 'off'}`,
+    tierLine,
     position.exit_reason ? `Exit: ${escapeHtml(position.exit_reason)} at ${fmtUsd(position.exit_mcap)} (${fmtPct(position.pnl_percent)})` : null,
     position.exit_signature ? `Exit TX: <a href="${txLink(position.exit_signature)}">${short(position.exit_signature)}</a>` : null,
   ].filter(Boolean).join('\n');

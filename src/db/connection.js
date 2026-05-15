@@ -220,6 +220,7 @@ export function initDb() {
   ensureColumn('dry_run_positions', 'strategy_id', "TEXT DEFAULT 'sniper'");
   ensureColumn('dry_run_positions', 'partial_tp_done', 'INTEGER DEFAULT 0');
   ensureColumn('dry_run_positions', 'strategy_config_json', 'TEXT');
+  ensureColumn('dry_run_positions', 'tp_tier_hits', 'INTEGER DEFAULT 0');
   ensureColumn('decision_logs', 'strategy_id', 'TEXT');
 
   const defaults = {
