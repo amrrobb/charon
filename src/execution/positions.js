@@ -144,34 +144,39 @@ export async function refreshPosition(position, { autoExit = true, jupiterPnl = 
   const ladder = Array.isArray(strat?.tp_ladder_pct) ? strat.tp_ladder_pct : [];
   const ladderSells = Array.isArray(strat?.tp_ladder_sell_pct) ? strat.tp_ladder_sell_pct : [];
   if (!exitReason && ladder.length > 0) {
-    const tierHits = Number(position.tp_tier_hits || 0);
-    // Find highest tier whose threshold the current pnl has crossed, that
-    // we haven't yet recorded as hit.
-    let nextTier = tierHits;
-    while (nextTier < ladder.length && pnlPercent >= Number(ladder[nextTier])) {
-      nextTier += 1;
-    }
-    if (nextTier > tierHits) {
-      const sellPct = Number(ladderSells[nextTier - 1] ?? ladderSells[0] ?? 50);
-      db.prepare('UPDATE dry_run_positions SET tp_tier_hits = ? WHERE id = ?').run(nextTier, position.id);
-      console.log(`[position] ${position.id} TIER_TP tier ${nextTier}/${ladder.length} at ${pnlPercent.toFixed(1)}% (sell ${sellPct}% of remaining)`);
+    let tierHits = Number(position.tp_tier_hits || 0);
+    // Walk through each tier the pnl has crossed since the last refresh
+    // and emit a separate sell + trade row for each. Important when pnl
+    // jumps across multiple thresholds between refreshes (e.g. a fast
+    // pump from 0% to 250% crosses tier 1, 2, and 3 in a single tick).
+    let liveTokenRemaining = position.execution_mode === 'live' && position.token_amount_raw
+      ? Number(position.token_amount_raw) : null;
+    while (tierHits < ladder.length && pnlPercent >= Number(ladder[tierHits])) {
+      tierHits += 1;
+      const sellPct = Number(ladderSells[tierHits - 1] ?? ladderSells[0] ?? 50);
+      console.log(`[position] ${position.id} TIER_TP tier ${tierHits}/${ladder.length} at ${pnlPercent.toFixed(1)}% (sell ${sellPct}% of remaining)`);
       db.prepare(`
         INSERT INTO dry_run_trades (position_id, mint, side, at_ms, price, mcap, size_sol, token_amount_est, reason, payload_json)
         VALUES (?, ?, 'sell', ?, ?, ?, ?, ?, ?, ?)
       `).run(position.id, position.mint, now(), price, mcap,
-        position.size_sol * (sellPct / 100), null, `TIER_TP_${nextTier}`,
-        json({ pnlPercent, tier: nextTier, threshold: ladder[nextTier - 1], sellPct }));
-      if (position.execution_mode === 'live' && position.token_amount_raw) {
+        position.size_sol * (sellPct / 100), null, `TIER_TP_${tierHits}`,
+        json({ pnlPercent, tier: tierHits, threshold: ladder[tierHits - 1], sellPct }));
+      if (liveTokenRemaining != null && liveTokenRemaining > 0) {
         try {
-          const sellAmount = Math.floor(Number(position.token_amount_raw) * (sellPct / 100));
+          const sellAmount = Math.floor(liveTokenRemaining * (sellPct / 100));
           if (sellAmount > 0) {
-            const sell = await executeLiveSell({ ...position, token_amount_raw: String(sellAmount) }, `TIER_TP_${nextTier}`);
-            const remaining = Number(position.token_amount_raw) - sellAmount;
-            db.prepare('UPDATE dry_run_positions SET token_amount_raw = ? WHERE id = ?').run(String(remaining), position.id);
+            await executeLiveSell({ ...position, token_amount_raw: String(sellAmount) }, `TIER_TP_${tierHits}`);
+            liveTokenRemaining -= sellAmount;
           }
         } catch (err) {
-          console.log(`[position] ${position.id} tier ${nextTier} sell failed: ${err.message}`);
+          console.log(`[position] ${position.id} tier ${tierHits} sell failed: ${err.message}`);
         }
+      }
+    }
+    if (tierHits !== Number(position.tp_tier_hits || 0)) {
+      db.prepare('UPDATE dry_run_positions SET tp_tier_hits = ? WHERE id = ?').run(tierHits, position.id);
+      if (liveTokenRemaining != null) {
+        db.prepare('UPDATE dry_run_positions SET token_amount_raw = ? WHERE id = ?').run(String(liveTokenRemaining), position.id);
       }
     }
   }
