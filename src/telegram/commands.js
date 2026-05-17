@@ -29,6 +29,7 @@ import { handleCallback, editMenuMessage } from './callbacks.js';
 import { consumeNumericFilterInput } from './input.js';
 import { runLearning, sendLessons } from '../learning/commands.js';
 import { fetchWalletPnl } from '../enrichment/wallets.js';
+import { sendDaily, sendDayDetail } from './daily.js';
 
 export async function handleMessage(msg) {
   const text = (msg.text || '').trim();
@@ -76,6 +77,19 @@ export async function handleMessage(msg) {
     return bot.sendMessage(chatId, `Updated ${id}.${key} = ${value}\n\n${strategyMenuText()}`, { parse_mode: 'HTML' });
   }
   if (text.startsWith('/pnl')) return sendPnl(chatId);
+  if (text.startsWith('/daily')) {
+    const arg = Number(text.split(/\s+/)[1]);
+    const days = Number.isFinite(arg) && arg > 0 && arg <= 90 ? arg : 14;
+    return sendDaily(chatId, days);
+  }
+  if (text.startsWith('/day')) {
+    const dayStr = text.split(/\s+/)[1];
+    if (!dayStr) {
+      const today = new Date().toISOString().slice(0, 10);
+      return sendDayDetail(chatId, today);
+    }
+    return sendDayDetail(chatId, dayStr);
+  }
   if (text.startsWith('/learn')) {
     const windowArg = text.split(/\s+/)[1] || '12h';
     return runLearning(chatId, windowArg);
@@ -245,6 +259,8 @@ export function setupTelegram() {
     { command: 'candidate', description: 'Show candidate by mint' },
     { command: 'filters', description: 'Show filters' },
     { command: 'pnl', description: 'Show saved-wallet PnL' },
+    { command: 'daily', description: 'Daily PnL calendar (last N days)' },
+    { command: 'day', description: 'Trades for a specific day (YYYY-MM-DD)' },
     { command: 'learn', description: 'Run manual learning report' },
     { command: 'lessons', description: 'Show active screening lessons' },
     { command: 'setfilter', description: 'Set a filter value' },
