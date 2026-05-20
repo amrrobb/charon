@@ -79,6 +79,8 @@ export const strategyNumericLabels = {
   token_age_max_ms: 'maximum token age milliseconds',
   token_age_min_ms: 'minimum token age milliseconds (0=off; e.g. 1800000 = 30m floor)',
   min_buy_sell_ratio: 'minimum buys/(buys+sells) ratio from trending source (0-1, e.g. 0.7)',
+  panic_sl_pct: 'panic SL drop percent within panic_sl_window_ms (0=off; e.g. 8 means -8% in window triggers)',
+  panic_sl_window_ms: 'window milliseconds for panic SL (0=off; e.g. 30000 = 30s)',
   trending_min_volume_usd: 'minimum trending volume USD',
   trending_min_swaps: 'minimum trending swaps',
   trending_max_rug_ratio: 'maximum trending rug ratio (0.3 = 30%)',
@@ -272,6 +274,10 @@ export function strategyKeyboard() {
     [
       { text: `Buy Ratio ${strat.min_buy_sell_ratio > 0 ? Math.round(strat.min_buy_sell_ratio * 100) + '%' : 'off'}`, callback_data: 'stratinput:min_buy_sell_ratio' },
       { text: `Trend Vol ${fmtUsd(strat.trending_min_volume_usd)}`, callback_data: 'stratinput:trending_min_volume_usd' },
+    ],
+    [
+      { text: `Panic SL ${strat.panic_sl_pct > 0 ? `-${strat.panic_sl_pct}%` : 'off'}`, callback_data: 'stratinput:panic_sl_pct' },
+      { text: `Panic Win ${strat.panic_sl_window_ms > 0 ? Math.round(strat.panic_sl_window_ms / 1000) + 's' : 'off'}`, callback_data: 'stratinput:panic_sl_window_ms' },
     ],
     [
       { text: `Trend Swaps ${strat.trending_min_swaps}`, callback_data: 'stratinput:trending_min_swaps' },

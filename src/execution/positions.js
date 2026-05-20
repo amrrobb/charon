@@ -136,6 +136,25 @@ export async function refreshPosition(position, { autoExit = true, jupiterPnl = 
     exitReason = 'MAX_HOLD';
   }
 
+  // Panic SL: rug-velocity stop. If P&L drops `panic_sl_pct` within
+  // `panic_sl_window_ms`, exit immediately rather than waiting for the
+  // normal sl_percent floor. Catches bonding-curve rugs that vacuum past
+  // the standard SL with high slippage before the next tick.
+  if (!exitReason && strat?.panic_sl_pct > 0 && strat?.panic_sl_window_ms > 0) {
+    const windowStart = now() - strat.panic_sl_window_ms;
+    const recent = db.prepare(`
+      SELECT MAX(unrealized_pnl_percent) AS peak
+      FROM position_snapshots
+      WHERE position_id = ? AND at_ms >= ?
+    `).get(position.id, windowStart);
+    const recentPeak = recent?.peak != null ? Number(recent.peak) : pnlPercent;
+    const drop = pnlPercent - recentPeak; // negative = dropped from peak
+    if (drop <= -Math.abs(Number(strat.panic_sl_pct))) {
+      exitReason = 'PANIC_SL';
+      console.log(`[position] ${position.id} PANIC_SL: ${drop.toFixed(1)}% in ${strat.panic_sl_window_ms / 1000}s (peak ${recentPeak.toFixed(1)} -> now ${pnlPercent.toFixed(1)})`);
+    }
+  }
+
   // Multi-tier TP ladder. When strat.tp_ladder_pct = [50, 100, 200, 350, 500]
   // each entry is a P&L% threshold. tp_ladder_sell_pct holds the matching
   // sell percentage (of remaining position) at each rung. Ladder takes
