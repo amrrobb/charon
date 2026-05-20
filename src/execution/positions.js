@@ -140,7 +140,11 @@ export async function refreshPosition(position, { autoExit = true, jupiterPnl = 
   // `panic_sl_window_ms`, exit immediately rather than waiting for the
   // normal sl_percent floor. Catches bonding-curve rugs that vacuum past
   // the standard SL with high slippage before the next tick.
-  if (!exitReason && strat?.panic_sl_pct > 0 && strat?.panic_sl_window_ms > 0) {
+  // Only fires when (a) position is already in danger (pnl <= panic_sl_floor_pct,
+  // default -5%) AND (b) drop from window peak exceeds panic_sl_pct. Avoids
+  // false positives on healthy positions doing normal late-stage volatility.
+  const panicFloor = strat?.panic_sl_floor_pct != null ? Number(strat.panic_sl_floor_pct) : -5;
+  if (!exitReason && strat?.panic_sl_pct > 0 && strat?.panic_sl_window_ms > 0 && pnlPercent <= panicFloor) {
     const windowStart = now() - strat.panic_sl_window_ms;
     const recent = db.prepare(`
       SELECT MAX(unrealized_pnl_percent) AS peak
@@ -148,10 +152,10 @@ export async function refreshPosition(position, { autoExit = true, jupiterPnl = 
       WHERE position_id = ? AND at_ms >= ?
     `).get(position.id, windowStart);
     const recentPeak = recent?.peak != null ? Number(recent.peak) : pnlPercent;
-    const drop = pnlPercent - recentPeak; // negative = dropped from peak
+    const drop = pnlPercent - recentPeak;
     if (drop <= -Math.abs(Number(strat.panic_sl_pct))) {
       exitReason = 'PANIC_SL';
-      console.log(`[position] ${position.id} PANIC_SL: ${drop.toFixed(1)}% in ${strat.panic_sl_window_ms / 1000}s (peak ${recentPeak.toFixed(1)} -> now ${pnlPercent.toFixed(1)})`);
+      console.log(`[position] ${position.id} PANIC_SL: ${drop.toFixed(1)}% in ${strat.panic_sl_window_ms / 1000}s (peak ${recentPeak.toFixed(1)} -> now ${pnlPercent.toFixed(1)}, floor ${panicFloor})`);
     }
   }
 

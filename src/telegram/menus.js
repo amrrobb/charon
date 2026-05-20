@@ -81,6 +81,7 @@ export const strategyNumericLabels = {
   min_buy_sell_ratio: 'minimum buys/(buys+sells) ratio from trending source (0-1, e.g. 0.7)',
   panic_sl_pct: 'panic SL drop percent within panic_sl_window_ms (0=off; e.g. 8 means -8% in window triggers)',
   panic_sl_window_ms: 'window milliseconds for panic SL (0=off; e.g. 30000 = 30s)',
+  panic_sl_floor_pct: 'panic SL only fires when pnl is at or below this (e.g. -5 means -5%; default -5)',
   trending_min_volume_usd: 'minimum trending volume USD',
   trending_min_swaps: 'minimum trending swaps',
   trending_max_rug_ratio: 'maximum trending rug ratio (0.3 = 30%)',
@@ -278,6 +279,9 @@ export function strategyKeyboard() {
     [
       { text: `Panic SL ${strat.panic_sl_pct > 0 ? `-${strat.panic_sl_pct}%` : 'off'}`, callback_data: 'stratinput:panic_sl_pct' },
       { text: `Panic Win ${strat.panic_sl_window_ms > 0 ? Math.round(strat.panic_sl_window_ms / 1000) + 's' : 'off'}`, callback_data: 'stratinput:panic_sl_window_ms' },
+    ],
+    [
+      { text: `Panic Floor ${strat.panic_sl_floor_pct != null ? strat.panic_sl_floor_pct + '%' : '-5%'}`, callback_data: 'stratinput:panic_sl_floor_pct' },
     ],
     [
       { text: `Trend Swaps ${strat.trending_min_swaps}`, callback_data: 'stratinput:trending_min_swaps' },

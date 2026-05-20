@@ -184,6 +184,7 @@ const STRAT_PRESETS = {
   min_buy_sell_ratio: [0, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8],
   panic_sl_pct: [0, 5, 8, 10, 15, 20],
   panic_sl_window_ms: [0, 15000, 30000, 60000, 120000, 300000],
+  panic_sl_floor_pct: [0, -3, -5, -8, -10, -12],
 };
 
 function formatStratValue(key, value) {
