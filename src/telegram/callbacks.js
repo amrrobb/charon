@@ -180,12 +180,15 @@ const STRAT_PRESETS = {
   min_gmgn_total_fee_sol: [0, 3, 5, 10, 20],
   max_ath_distance_pct: [0, -20, -30, -40, -50, -60],
   token_age_max_ms: [0, 1800000, 3600000, 7200000, 14400000, 43200000, 86400000],
+  token_age_min_ms: [0, 600000, 1800000, 3600000, 7200000, 14400000],
+  min_buy_sell_ratio: [0, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8],
 };
 
 function formatStratValue(key, value) {
-  if (key === 'max_hold_ms' || key === 'token_age_max_ms') {
+  if (key === 'max_hold_ms' || key === 'token_age_max_ms' || key === 'token_age_min_ms') {
     return value > 0 ? `${Math.round(value / 60000)}m` : 'off';
   }
+  if (key === 'min_buy_sell_ratio') return value > 0 ? `${Math.round(value * 100)}%` : 'off';
   if (key.includes('percent') || key.includes('pct')) return `${value}%`;
   if (key.includes('sol')) return `${value} SOL`;
   if (key.includes('usd')) return value > 0 ? `$${value.toLocaleString()}` : 'off';

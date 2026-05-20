@@ -110,6 +110,17 @@ export function filterCandidate(candidate) {
     if (candidate.trending.is_wash_trading === true || candidate.trending.is_wash_trading === 1) {
       failures.push('trending wash trading');
     }
+    if (strat.min_buy_sell_ratio > 0) {
+      const buys = Number(candidate.trending.buys ?? 0);
+      const sells = Number(candidate.trending.sells ?? 0);
+      const total = buys + sells;
+      if (total > 0) {
+        const ratio = buys / total;
+        if (ratio < strat.min_buy_sell_ratio) {
+          failures.push(`buy/sell ratio: ${ratio.toFixed(2)} < ${strat.min_buy_sell_ratio}`);
+        }
+      }
+    }
   }
 
   return { passed: failures.length === 0, failures, strategy: strat.id };

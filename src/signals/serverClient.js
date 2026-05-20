@@ -113,6 +113,10 @@ export async function fetchServerSignals() {
         const tokenAge = signal.ageMs || 0;
         if (tokenAge > strat.token_age_max_ms) { processed++; continue; }
       }
+      if (strat.token_age_min_ms > 0) {
+        const tokenAge = signal.ageMs || 0;
+        if (tokenAge < strat.token_age_min_ms) { processed++; continue; }
+      }
 
       // Determine route
       let route = null;

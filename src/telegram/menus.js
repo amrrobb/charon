@@ -77,6 +77,8 @@ export const strategyNumericLabels = {
   max_ath_distance_pct: 'maximum ATH distance percent (-40 = 40% below ATH, 0 = off)',
   min_source_count: 'minimum source count',
   token_age_max_ms: 'maximum token age milliseconds',
+  token_age_min_ms: 'minimum token age milliseconds (0=off; e.g. 1800000 = 30m floor)',
+  min_buy_sell_ratio: 'minimum buys/(buys+sells) ratio from trending source (0-1, e.g. 0.7)',
   trending_min_volume_usd: 'minimum trending volume USD',
   trending_min_swaps: 'minimum trending swaps',
   trending_max_rug_ratio: 'maximum trending rug ratio (0.3 = 30%)',
@@ -264,7 +266,11 @@ export function strategyKeyboard() {
       { text: `ATH ${strat.max_ath_distance_pct < 0 ? `${strat.max_ath_distance_pct}%` : 'off'}`, callback_data: 'stratinput:max_ath_distance_pct' },
     ],
     [
-      { text: `Age ${strat.token_age_max_ms > 0 ? Math.round(strat.token_age_max_ms / 60000) + 'm' : 'off'}`, callback_data: 'stratinput:token_age_max_ms' },
+      { text: `Age Max ${strat.token_age_max_ms > 0 ? Math.round(strat.token_age_max_ms / 60000) + 'm' : 'off'}`, callback_data: 'stratinput:token_age_max_ms' },
+      { text: `Age Min ${strat.token_age_min_ms > 0 ? Math.round(strat.token_age_min_ms / 60000) + 'm' : 'off'}`, callback_data: 'stratinput:token_age_min_ms' },
+    ],
+    [
+      { text: `Buy Ratio ${strat.min_buy_sell_ratio > 0 ? Math.round(strat.min_buy_sell_ratio * 100) + '%' : 'off'}`, callback_data: 'stratinput:min_buy_sell_ratio' },
       { text: `Trend Vol ${fmtUsd(strat.trending_min_volume_usd)}`, callback_data: 'stratinput:trending_min_volume_usd' },
     ],
     [
