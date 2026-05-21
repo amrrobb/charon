@@ -185,6 +185,7 @@ const STRAT_PRESETS = {
   panic_sl_pct: [0, 5, 8, 10, 15, 20],
   panic_sl_window_ms: [0, 15000, 30000, 60000, 120000, 300000],
   panic_sl_floor_pct: [0, -3, -5, -8, -10, -12],
+  liq_drain_pct: [0, 15, 20, 25, 30, 40, 50],
 };
 
 function formatStratValue(key, value) {
@@ -192,7 +193,7 @@ function formatStratValue(key, value) {
     return value > 0 ? `${Math.round(value / 60000)}m` : 'off';
   }
   if (key === 'panic_sl_window_ms') return value > 0 ? `${Math.round(value / 1000)}s` : 'off';
-  if (key === 'panic_sl_pct') return value > 0 ? `-${Math.abs(value)}%` : 'off';
+  if (key === 'panic_sl_pct' || key === 'liq_drain_pct') return value > 0 ? `-${Math.abs(value)}%` : 'off';
   if (key === 'min_buy_sell_ratio') return value > 0 ? `${Math.round(value * 100)}%` : 'off';
   if (key.includes('percent') || key.includes('pct')) return `${value}%`;
   if (key.includes('sol')) return `${value} SOL`;

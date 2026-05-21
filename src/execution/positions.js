@@ -111,6 +111,7 @@ export async function refreshPosition(position, { autoExit = true, jupiterPnl = 
   const asset = await fetchJupiterAsset(position.mint);
   const price = firstPositiveNumber(asset?.usdPrice, position.high_water_price, position.entry_price);
   const mcap = firstPositiveNumber(asset?.mcap, asset?.fdv, position.high_water_mcap, position.entry_mcap);
+  const liquidity = Number(asset?.liquidity || 0);
   if (!Number.isFinite(Number(mcap)) || !Number.isFinite(Number(position.entry_mcap)) || Number(position.entry_mcap) <= 0) {
     return null;
   }
@@ -134,6 +135,24 @@ export async function refreshPosition(position, { autoExit = true, jupiterPnl = 
   const strat = strategyById(position.strategy_id);
   if (strat?.max_hold_ms > 0 && (now() - position.opened_at_ms) >= strat.max_hold_ms) {
     exitReason = 'MAX_HOLD';
+  }
+
+  // Liquidity drain stop. If current liquidity drops `liq_drain_pct`% from
+  // the peak liquidity seen during this position, exit immediately. Catches
+  // LP-pull rugs upstream of the price crash they cause.
+  if (!exitReason && strat?.liq_drain_pct > 0 && liquidity > 0) {
+    const peak = db.prepare(`
+      SELECT MAX(liquidity_usd) AS peak FROM position_snapshots
+      WHERE position_id = ? AND liquidity_usd > 0
+    `).get(position.id);
+    const peakLiq = peak?.peak != null ? Number(peak.peak) : liquidity;
+    if (peakLiq > 0) {
+      const dropPct = ((liquidity - peakLiq) / peakLiq) * 100;
+      if (dropPct <= -Math.abs(Number(strat.liq_drain_pct))) {
+        exitReason = 'LIQ_DRAIN';
+        console.log(`[position] ${position.id} LIQ_DRAIN: liquidity ${peakLiq.toFixed(0)} -> ${liquidity.toFixed(0)} (${dropPct.toFixed(1)}%)`);
+      }
+    }
   }
 
   // Panic SL: rug-velocity stop. If P&L drops `panic_sl_pct` within
@@ -247,9 +266,9 @@ export async function refreshPosition(position, { autoExit = true, jupiterPnl = 
   `).run(highWaterMcap, highWaterPrice, trailingArmed ? 1 : 0, position.id);
 
   db.prepare(`
-    INSERT INTO position_snapshots (position_id, at_ms, price, mcap, unrealized_pnl_percent, unrealized_pnl_sol, high_water_mcap, trailing_armed)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(position.id, now(), price, mcap, pnlPercent, pnlSol, highWaterMcap, trailingArmed ? 1 : 0);
+    INSERT INTO position_snapshots (position_id, at_ms, price, mcap, unrealized_pnl_percent, unrealized_pnl_sol, high_water_mcap, trailing_armed, liquidity_usd)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(position.id, now(), price, mcap, pnlPercent, pnlSol, highWaterMcap, trailingArmed ? 1 : 0, liquidity || null);
 
   if (exitReason && autoExit && position.execution_mode === 'live') {
     if (sellInProgress.has(position.id)) return { ...position, exitReason: null };

@@ -82,6 +82,7 @@ export const strategyNumericLabels = {
   panic_sl_pct: 'panic SL drop percent within panic_sl_window_ms (0=off; e.g. 8 means -8% in window triggers)',
   panic_sl_window_ms: 'window milliseconds for panic SL (0=off; e.g. 30000 = 30s)',
   panic_sl_floor_pct: 'panic SL only fires when pnl is at or below this (e.g. -5 means -5%; default -5)',
+  liq_drain_pct: 'exit when liquidity drops this % from peak (0=off; e.g. 30 means -30% drain triggers)',
   trending_min_volume_usd: 'minimum trending volume USD',
   trending_min_swaps: 'minimum trending swaps',
   trending_max_rug_ratio: 'maximum trending rug ratio (0.3 = 30%)',
@@ -282,6 +283,7 @@ export function strategyKeyboard() {
     ],
     [
       { text: `Panic Floor ${strat.panic_sl_floor_pct != null ? strat.panic_sl_floor_pct + '%' : '-5%'}`, callback_data: 'stratinput:panic_sl_floor_pct' },
+      { text: `Liq Drain ${strat.liq_drain_pct > 0 ? `-${strat.liq_drain_pct}%` : 'off'}`, callback_data: 'stratinput:liq_drain_pct' },
     ],
     [
       { text: `Trend Swaps ${strat.trending_min_swaps}`, callback_data: 'stratinput:trending_min_swaps' },
