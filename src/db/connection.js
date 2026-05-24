@@ -469,6 +469,47 @@ export function initDb() {
   // sniper_safe: paranoid filters, tiny SL. Hypothesis — most losses
   // come from low-quality signals where the LLM gets fooled.
   // Tightens holder concentration cap and demands real volume.
+  // degen_filtered_v1: derived from B3+B4 backtest (id 245-404, n=159, ran on `degen`).
+  // Hypothesis: losers are topping pumps with concentrated holders.
+  // Inherits degen baseline; adds two filters validated in scripts/entryFilterSweep.js:
+  //   - max_top10_holder_percent: 55  (rejects holder-concentrated tokens)
+  //   - max_trending_volume_5m_usd: 1000 (rejects topping-pump entries)
+  // Backtest result on B3+B4: PF 0.93x→1.33x, PF base 0.77x→1.05x, n kept 96/159.
+  stratInsert.run('degen_filtered_v1', 'Degen (Filtered v1)', 0, JSON.stringify({
+    entry_mode: 'immediate',
+    min_source_count: 1,
+    require_fee_claim: false,
+    token_age_max_ms: 3600000,
+    min_mcap_usd: 5000,
+    max_mcap_usd: 100000,
+    min_fee_claim_sol: 0,
+    min_gmgn_total_fee_sol: 0,
+    min_holders: 0,
+    max_top20_holder_percent: 100,
+    max_top10_holder_percent: 55,
+    min_saved_wallet_holders: 0,
+    max_ath_distance_pct: 0,
+    min_graduated_volume_usd: 0,
+    trending_min_volume_usd: 0,
+    trending_min_swaps: 0,
+    max_trending_volume_5m_usd: 1000,
+    trending_max_rug_ratio: 0.5,
+    trending_max_bundler_rate: 0.7,
+    position_size_sol: 0.05,
+    max_open_positions: 5,
+    tp_percent: 30,
+    sl_percent: -15,
+    trailing_enabled: true,
+    trailing_percent: 10,
+    partial_tp: false,
+    partial_tp_at_percent: 0,
+    partial_tp_sell_percent: 0,
+    max_hold_ms: 0,
+    mint_cooldown_ms: 3600000,
+    use_llm: false,
+    llm_min_confidence: 0,
+  }), ts);
+
   stratInsert.run('sniper_safe', 'Sniper (Safe)', 0, JSON.stringify({
     entry_mode: 'immediate',
     min_source_count: 3,

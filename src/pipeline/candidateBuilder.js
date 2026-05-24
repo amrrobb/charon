@@ -80,6 +80,14 @@ export function filterCandidate(candidate) {
     failures.push(`max top holder: ${maxHolder}% > ${strat.max_top20_holder_percent}%`);
   }
 
+  // Top-10 holder concentration (backtested filter: dual_source losers cluster above ~55%).
+  if (strat.max_top10_holder_percent > 0 && strat.max_top10_holder_percent < 100) {
+    const top10 = Number(candidate.holders?.top10Percent);
+    if (Number.isFinite(top10) && top10 > strat.max_top10_holder_percent) {
+      failures.push(`top10 holders: ${top10.toFixed(1)}% > ${strat.max_top10_holder_percent}%`);
+    }
+  }
+
   // Saved wallet holders
   if (strat.min_saved_wallet_holders > 0 && savedCount < strat.min_saved_wallet_holders) {
     failures.push(`saved wallet holders: ${savedCount} < ${strat.min_saved_wallet_holders}`);
@@ -97,6 +105,14 @@ export function filterCandidate(candidate) {
   if (candidate.trending) {
     if (strat.trending_min_volume_usd > 0 && trendingVolume < strat.trending_min_volume_usd) {
       failures.push(`trending volume: ${trendingVolume} < ${strat.trending_min_volume_usd}`);
+    }
+    // Topping-pump filter: reject when last 5-min trading volume exceeds threshold.
+    // Backtest finding: losers had ~2x the 5m volume of winners (dual_source cohort).
+    if (strat.max_trending_volume_5m_usd > 0) {
+      const vol5m = Number(candidate.trending?.volume5m);
+      if (Number.isFinite(vol5m) && vol5m > strat.max_trending_volume_5m_usd) {
+        failures.push(`trending vol5m: ${vol5m.toFixed(0)} > ${strat.max_trending_volume_5m_usd}`);
+      }
     }
     if (strat.trending_min_swaps > 0 && trendingSwaps < strat.trending_min_swaps) {
       failures.push(`trending swaps: ${trendingSwaps} < ${strat.trending_min_swaps}`);
