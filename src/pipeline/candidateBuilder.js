@@ -213,6 +213,58 @@ export async function buildCandidate({ mint, fee = null, signature = null, gradu
     twitterNarrative,
     createdAtMs: now(),
   };
+  // Flat entry-time features for easy downstream analysis. The rest of the
+  // candidate stays nested as-is for backwards compatibility, but this block
+  // makes future W/L sweeps a 1-line json_extract per feature rather than
+  // walking through possibly-null nested objects.
+  candidate.entrySignals = buildEntrySignals(candidate);
   candidate.filters = filterCandidate(candidate);
   return candidate;
+}
+
+function buildEntrySignals(c) {
+  const t = c.trending || {};
+  const s5 = t.stats5m || {};
+  const s24 = t.stats24h || {};
+  const g = c.graduation || {};
+  const holdersArr = c.holders?.holders || [];
+  const gradAtMs = g.graduatedAt ? new Date(g.graduatedAt).getTime() : null;
+  return {
+    vol5mUsd: numOrNull(t.volume5m),
+    vol24hUsd: numOrNull(t.volume24h),
+    vol1hUsd: numOrNull(t.volume1h ?? t.volume),
+    buyVol5mUsd: numOrNull(t.buyVolume),
+    sellVol5mUsd: numOrNull(t.sellVolume),
+    buysCount: numOrNull(t.buys),
+    sellsCount: numOrNull(t.sells),
+    buySellRatio: t.buys != null && t.sells != null && (t.buys + t.sells) > 0
+      ? t.buys / (t.buys + t.sells) : null,
+    priceChange5mPct: numOrNull(s5.priceChange ?? t.change5m),
+    holderChange5mPct: numOrNull(s5.holderChange),
+    liquidityChange5mPct: numOrNull(s5.liquidityChange),
+    priceChange24hPct: numOrNull(s24.priceChange),
+    organicScore: numOrNull(t.organicScore),
+    organicScoreLabel: t.organicScoreLabel || null,
+    holderCount: numOrNull(c.holders?.count),
+    top1HolderPct: numOrNull(holdersArr[0]?.percent),
+    top10HolderPct: holdersArr.length
+      ? holdersArr.slice(0, 10).reduce((a, h) => a + (h.percent || 0), 0) : null,
+    top20HolderPct: numOrNull(c.holders?.top20Percent),
+    liquidityUsd: numOrNull(c.metrics?.liquidityUsd),
+    feeClaimSol: numOrNull(c.feeClaim?.distributedSol),
+    gmgnTotalFeesSol: numOrNull(c.metrics?.gmgnTotalFeesSol),
+    savedWalletHolderCount: numOrNull(c.savedWalletExposure?.holderCount),
+    gradAgeMs: gradAtMs ? Math.max(0, c.createdAtMs - gradAtMs) : null,
+    twitterFollowers: numOrNull(c.twitterNarrative?.followers),
+    twitterEngagementScore: numOrNull(c.twitterNarrative?.engagementScore),
+    hasFeeClaim: Boolean(c.signals?.hasFeeClaim),
+    hasGraduated: Boolean(c.signals?.hasGraduated),
+    hasTrending: Boolean(c.signals?.hasTrending),
+    route: c.signals?.route || null,
+  };
+}
+
+function numOrNull(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
 }
