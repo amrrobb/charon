@@ -84,16 +84,39 @@ export async function generateLessons(summary) {
   }
 }
 
+// Lesson governance (per OVERNIGHT_LOG note 6):
+// - Do not promote to 'active' until window has >=30 closed trades. Lessons
+//   from small N self-reinforce LLM bias and reject candidates that would
+//   disprove them (cost us most of B1 dry-run before the bug was spotted).
+// - Cap active lessons to MAX_ACTIVE so the LLM prompt stays focused; oldest
+//   actives get archived when new ones promote.
+const MIN_CLOSED_FOR_ACTIVE = Number(process.env.LESSON_MIN_CLOSED ?? 30);
+const MAX_ACTIVE = Number(process.env.LESSON_MAX_ACTIVE ?? 3);
+
 export function storeLearningRun(windowMs, summary, lessons, raw) {
   const result = db.prepare(`
     INSERT INTO learning_runs (created_at_ms, window_ms, summary_json, lessons_json, raw_json)
     VALUES (?, ?, ?, ?, ?)
   `).run(now(), windowMs, json(summary), json(lessons), json(raw));
   const runId = Number(result.lastInsertRowid);
+  const closedInWindow = Number(summary?.positions?.closed || 0);
+  const initialStatus = closedInWindow >= MIN_CLOSED_FOR_ACTIVE ? 'active' : 'pending';
   const insert = db.prepare(`
     INSERT INTO learning_lessons (run_id, created_at_ms, status, lesson, evidence_json)
-    VALUES (?, ?, 'active', ?, ?)
+    VALUES (?, ?, ?, ?, ?)
   `);
-  for (const item of lessons) insert.run(runId, now(), item.lesson, json(item.evidence || {}));
+  for (const item of lessons) insert.run(runId, now(), initialStatus, item.lesson, json(item.evidence || {}));
+  if (initialStatus === 'active') {
+    // Archive oldest actives until <= MAX_ACTIVE remain.
+    db.prepare(`
+      UPDATE learning_lessons SET status = 'archived'
+      WHERE id IN (
+        SELECT id FROM learning_lessons WHERE status = 'active'
+        ORDER BY id DESC LIMIT -1 OFFSET ?
+      )
+    `).run(MAX_ACTIVE);
+  } else {
+    console.log(`[learn] run ${runId}: ${lessons.length} lessons stored as 'pending' (window had ${closedInWindow} closed, need ${MIN_CLOSED_FOR_ACTIVE})`);
+  }
   return runId;
 }

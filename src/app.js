@@ -7,6 +7,7 @@ import { monitorPositions } from './execution/positions.js';
 import { processCandidateFromSignals, maybeProcessDegenCandidate } from './pipeline/orchestrator.js';
 import { sendTelegram } from './telegram/send.js';
 import { makeFailureTracker } from './utils.js';
+import { sendDailySummaryIfDue } from './learning/dailySummary.js';
 
 setDefaultResultOrder('ipv4first');
 validateConfig();
@@ -60,4 +61,9 @@ export async function startCharon() {
   // Position monitoring runs in both modes
   const trackPositions = makeFailureTracker('position monitor', (msg) => sendTelegram(msg));
   setInterval(() => trackPositions(() => monitorPositions()), POSITION_CHECK_MS);
+
+  // Daily summary — fires every hour, but the internal 23h cooldown means
+  // it actually sends once per day. Survives bot restarts within the day
+  // because the cooldown resets on boot (acceptable: at most one extra send).
+  setInterval(() => sendDailySummaryIfDue(), 60 * 60 * 1000);
 }

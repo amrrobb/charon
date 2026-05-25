@@ -28,6 +28,7 @@ import { executeLiveSell } from '../execution/router.js';
 import { handleCallback, editMenuMessage } from './callbacks.js';
 import { consumeNumericFilterInput } from './input.js';
 import { runLearning, sendLessons } from '../learning/commands.js';
+import { buildDailySummary, formatDailySummary } from '../learning/dailySummary.js';
 import { fetchWalletPnl } from '../enrichment/wallets.js';
 import { sendDaily, sendDayDetail } from './daily.js';
 
@@ -95,6 +96,9 @@ export async function handleMessage(msg) {
     return runLearning(chatId, windowArg);
   }
   if (text.startsWith('/lessons')) return sendLessons(chatId);
+  if (text.startsWith('/summary')) {
+    return bot.sendMessage(chatId, formatDailySummary(buildDailySummary()), { parse_mode: 'HTML' });
+  }
   if (text.startsWith('/candidate')) {
     const mint = text.split(/\s+/)[1];
     if (!mint) return bot.sendMessage(chatId, 'Usage: /candidate <mint>');
@@ -263,6 +267,7 @@ export function setupTelegram() {
     { command: 'day', description: 'Trades for a specific day (YYYY-MM-DD)' },
     { command: 'learn', description: 'Run manual learning report' },
     { command: 'lessons', description: 'Show active screening lessons' },
+    { command: 'summary', description: 'Per-strategy 24h summary (WR, PF, rejections)' },
     { command: 'setfilter', description: 'Set a filter value' },
     { command: 'walletadd', description: 'Save wallet for exposure/PnL' },
     { command: 'walletremove', description: 'Remove saved wallet' },
