@@ -114,6 +114,21 @@ export function filterCandidate(candidate) {
         failures.push(`trending vol5m: ${vol5m.toFixed(0)} > ${strat.max_trending_volume_5m_usd}`);
       }
     }
+    // Favor filter: only enter when holder count is rising. Backtest train/test
+    // verdict: holderChange5m > +5% produced +13.7%/+10.5% avg PnL with 0%
+    // cat rate on TEST. Thesis: fresh organic demand, not topping pump.
+    // Set strategy.require_holder_change_5m_min_pct > 0 to enable; missing
+    // data on a candidate is treated as REJECT (favor filter requires
+    // confirmed positive signal, not absence of negative).
+    if (strat.require_holder_change_5m_min_pct != null && strat.require_holder_change_5m_min_pct !== 0) {
+      const holderChange5m = Number(candidate.trending?.stats5m?.holderChange);
+      const threshold = Number(strat.require_holder_change_5m_min_pct);
+      if (!Number.isFinite(holderChange5m)) {
+        failures.push(`holderChange5m: data missing (favor filter requires confirmation)`);
+      } else if (holderChange5m < threshold) {
+        failures.push(`holderChange5m: ${holderChange5m.toFixed(2)}% < ${threshold}%`);
+      }
+    }
     if (strat.trending_min_swaps > 0 && trendingSwaps < strat.trending_min_swaps) {
       failures.push(`trending swaps: ${trendingSwaps} < ${strat.trending_min_swaps}`);
     }
