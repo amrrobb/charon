@@ -114,12 +114,9 @@ export function filterCandidate(candidate) {
         failures.push(`trending vol5m: ${vol5m.toFixed(0)} > ${strat.max_trending_volume_5m_usd}`);
       }
     }
-    // Favor filter: only enter when holder count is rising. Backtest train/test
-    // verdict: holderChange5m > +5% produced +13.7%/+10.5% avg PnL with 0%
-    // cat rate on TEST. Thesis: fresh organic demand, not topping pump.
-    // Set strategy.require_holder_change_5m_min_pct > 0 to enable; missing
-    // data on a candidate is treated as REJECT (favor filter requires
-    // confirmed positive signal, not absence of negative).
+    // Favor filter: only enter when holder count is rising (DEPRECATED —
+    // failed live with avg -4.34% on 93 trades, WR collapsed 46.7% → 22.6%).
+    // Kept in code for future re-evaluation but not recommended for use.
     if (strat.require_holder_change_5m_min_pct != null && strat.require_holder_change_5m_min_pct !== 0) {
       const holderChange5m = Number(candidate.trending?.stats5m?.holderChange);
       const threshold = Number(strat.require_holder_change_5m_min_pct);
@@ -127,6 +124,19 @@ export function filterCandidate(candidate) {
         failures.push(`holderChange5m: data missing (favor filter requires confirmation)`);
       } else if (holderChange5m < threshold) {
         failures.push(`holderChange5m: ${holderChange5m.toFixed(2)}% < ${threshold}%`);
+      }
+    }
+    // Smart wallet gate: require at least N GMGN-tracked smart wallets holding.
+    // Thesis: tokens with zero smart wallets have significantly higher rug/cat
+    // rate. Industry-confirmed signal (GMGN tracks 50K+ smart wallets).
+    // Train/test: TRAIN neutral (pfBaseΔ +0.01x), TEST improves (pfBaseΔ +0.15x,
+    // catΔ +3.5pp, moonshot 100% retained, keeps 80% of trades).
+    // Originally pre-stated at sw>=3 but sw>=1 is strictly more defensible
+    // (TRAIN-neutral vs TRAIN-harmful). Documented swap in LESSONS.md.
+    if (strat.min_smart_wallets != null && strat.min_smart_wallets > 0) {
+      const smartWallets = Number(candidate.gmgn?.wallet_tags_stat?.smart_wallets);
+      if (!Number.isFinite(smartWallets) || smartWallets < strat.min_smart_wallets) {
+        failures.push(`smart_wallets: ${Number.isFinite(smartWallets) ? smartWallets : 'n/a'} < ${strat.min_smart_wallets}`);
       }
     }
     if (strat.trending_min_swaps > 0 && trendingSwaps < strat.trending_min_swaps) {
