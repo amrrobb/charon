@@ -163,7 +163,11 @@ export async function refreshPosition(position, { autoExit = true, jupiterPnl = 
   // default -5%) AND (b) drop from window peak exceeds panic_sl_pct. Avoids
   // false positives on healthy positions doing normal late-stage volatility.
   const panicFloor = strat?.panic_sl_floor_pct != null ? Number(strat.panic_sl_floor_pct) : -5;
-  if (!exitReason && strat?.panic_sl_pct > 0 && strat?.panic_sl_window_ms > 0 && pnlPercent <= panicFloor) {
+  const panicPeakGate = Number(strat?.panic_sl_peak_gate_pct || 0);
+  const allTimePeakPnl = highWaterMcap > 0 && Number(position.entry_mcap) > 0
+    ? (highWaterMcap / Number(position.entry_mcap) - 1) * 100 : 0;
+  const panicGated = panicPeakGate > 0 && allTimePeakPnl >= panicPeakGate;
+  if (!exitReason && !panicGated && strat?.panic_sl_pct > 0 && strat?.panic_sl_window_ms > 0 && pnlPercent <= panicFloor) {
     const windowStart = now() - strat.panic_sl_window_ms;
     const recent = db.prepare(`
       SELECT MAX(unrealized_pnl_percent) AS peak
