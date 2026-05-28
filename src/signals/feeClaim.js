@@ -6,6 +6,7 @@ import { storeSignalEvent } from './trending.js';
 import { graduated } from './graduated.js';
 import { trending } from './trending.js';
 import { buildFeeSnapshot } from '../pipeline/candidateBuilder.js';
+import { processBondingCurveLog } from './bondingCurve.js';
 
 export const seenFeeClaims = new Map();
 let candidateHandler = null;
@@ -54,7 +55,11 @@ async function processLog(logInfo) {
     } catch {
       continue;
     }
-    if (data.length < 8 || !discMatch(data, DISC_DIST_FEES)) continue;
+    if (data.length < 8) continue;
+    // Try bonding curve events first (CREATE, TRADE, COMPLETE)
+    if (processBondingCurveLog(data)) continue;
+    // Then fee claim events
+    if (!discMatch(data, DISC_DIST_FEES)) continue;
     try {
       await handleFeeClaim(parseDistFees(data), signature);
     } catch (error) {
