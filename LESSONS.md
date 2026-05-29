@@ -119,6 +119,29 @@ Pump.fun has 98.6% rug rate (Solidus Labs). Our 9% catastrophe rate means basic 
 - After 100 trades: if pfBase < 0.85x, revert.
 - **This is the LAST entry-filter experiment.** If sw>=1 fails live, the next move is either: (a) build dev-wallet live monitoring as a post-entry exit signal, or (b) declare entry-filter optimization exhausted on this signal mix.
 
+---
+
+# Lessons — bonding curve monitor incident (2026-05-30)
+
+## What happened
+1. Phase 1 bonding curve monitor (commits d75b128, d2119a4) added `startWebsocket()` to **server mode** so the Helius WS would run on the VPS (previously WS only ran in standalone mode, which the VPS doesn't use).
+2. The WS `logsSubscribe` on the full pump.fun program is a firehose — 484 alerts/hr means tens of thousands of underlying TRADE events.
+3. Helius started returning **429 (rate limited)** on the WS upgrade. The pre-existing `feeClaim.js startWebsocket()` reconnect is a **fixed 5s retry with no backoff** (lines 98-102) — so it hammered Helius every 5s for ~22 hours: **15,692 reconnect attempts logged**.
+4. The Helius key is **shared with Meridian** (user's other live bot). Meridian was also seeing 429s.
+5. Reverted commit d2119a4 (server-mode WS) to stop the bleed. Charon's core `degen_sw_v1` is HTTP-fed from the signal server, so it kept trading unaffected (20 positions/2h through the incident).
+
+## L16. A shared API key is a shared blast radius.
+Adding a high-volume consumer (WS firehose) on a key shared with a live system (Meridian) degraded both. **Before adding any new high-volume API consumer, check what else uses the key.** The CLAUDE.md rule "VPS is personal projects only" exists for exactly this isolation reason.
+
+## L17. Diagnose causation before assuming it.
+First instinct was "my WS spam caused Meridian's 429s." Checking the timeline disproved it: Meridian's 429s fire on a **precise clock-aligned 5-min cadence** (20:45:00, 20:50:00, 21:00:00...) — its own scheduled wallet-poll exceeding the shared key's quota. They predated Charon's WS and continued after it died. Charon added load but was not the root cause. **Pull the actual timestamps; don't infer causation from coincidence.**
+
+## L18. Any reconnect loop needs exponential backoff + jitter + cap.
+`feeClaim.js startWebsocket()` retries every fixed 5s. Dormant for months because WS never ran in server mode; the moment it did + hit 429, it became a 5s DoS against our own key. **Before re-enabling any WS here: add backoff (5s → cap 60s), jitter, and a max-retry circuit breaker.** This is unfixed as of the revert — do NOT re-enable the WS without fixing it first.
+
+## L19. The bonding curve monitor is PARKED, not dead.
+Phase 1 proved the detection works (1.8x graduation lift at 3 SOL, 3.3x at 10 SOL threshold; graduated tokens had median 15.5 SOL in vs 8.2 for non-grad). But it **cannot run on the shared Helius key** — it needs its own dedicated key (or a paid Helius tier with higher WS/credit limits). This is a prerequisite for Phase 3, not an optional nicety. Surface as a cost/key decision to the user before resuming.
+
 ## Pre-conditions for the next optimization attempt
 
 1. Expand `snapshot_json` capture: ✅ DONE (entrySignals block, commit b82c4e9).
