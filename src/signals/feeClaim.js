@@ -68,14 +68,50 @@ async function processLog(logInfo) {
   }
 }
 
-export function startWebsocket() {
-  const wsUrl = SOLANA_WS_URL;
+// Reconnect with exponential backoff + jitter + cap + circuit breaker.
+// Lesson L18: a fixed 5s reconnect with no backoff became a 15,692-attempt
+// DoS against our own Helius key when the WS hit 429. Never again.
+export function startWebsocket(wsUrl = SOLANA_WS_URL) {
+  if (!wsUrl) {
+    console.log('[ws] no WS URL configured, websocket disabled');
+    return;
+  }
   let ws;
   let pingTimer;
+  let attempt = 0;
+  let consecutive429 = 0;
+  const BASE_DELAY = 5000;
+  const MAX_DELAY = 120_000;        // cap at 2 min
+  const CIRCUIT_BREAK_429 = 20;     // after 20 consecutive 429s, stop trying for a long while
+  const CIRCUIT_COOLDOWN = 30 * 60 * 1000; // 30 min pause when breaker trips
+
+  function nextDelay(rateLimited) {
+    // Exponential backoff with full jitter; 429 escalates faster.
+    const factor = rateLimited ? 3 : 2;
+    const ceil = Math.min(MAX_DELAY, BASE_DELAY * Math.pow(factor, Math.min(attempt, 8)));
+    return Math.floor(BASE_DELAY + Math.random() * (ceil - BASE_DELAY));
+  }
+
+  function scheduleReconnect(rateLimited) {
+    if (rateLimited && consecutive429 >= CIRCUIT_BREAK_429) {
+      console.log(`[ws] circuit breaker tripped (${consecutive429} consecutive 429s) — pausing ${CIRCUIT_COOLDOWN / 60000}min`);
+      consecutive429 = 0;
+      attempt = 0;
+      setTimeout(connect, CIRCUIT_COOLDOWN);
+      return;
+    }
+    const delay = nextDelay(rateLimited);
+    console.log(`[ws] reconnecting in ${(delay / 1000).toFixed(0)}s (attempt ${attempt}${rateLimited ? ', rate-limited' : ''})`);
+    setTimeout(connect, delay);
+  }
+
   function connect() {
+    attempt += 1;
     ws = new WebSocket(wsUrl);
     ws.on('open', () => {
       console.log('[ws] connected');
+      attempt = 0;
+      consecutive429 = 0;
       for (const [id, program] of [[1, PUMP_PROGRAM], [2, PUMP_AMM]]) {
         ws.send(JSON.stringify({
           jsonrpc: '2.0',
@@ -100,10 +136,16 @@ export function startWebsocket() {
         processLog(value).catch(error => console.log(`[ws] process failed: ${error.message}`));
       }
     });
+    let lastErrorWas429 = false;
+    ws.on('unexpected-response', (_req, res) => {
+      lastErrorWas429 = res.statusCode === 429;
+      if (lastErrorWas429) consecutive429 += 1;
+      console.log(`[ws] unexpected response: ${res.statusCode}`);
+    });
     ws.on('close', () => {
       clearInterval(pingTimer);
-      console.log('[ws] closed, reconnecting in 5s');
-      setTimeout(connect, 5000);
+      scheduleReconnect(lastErrorWas429);
+      lastErrorWas429 = false;
     });
     ws.on('error', error => console.log(`[ws] ${error.message}`));
   }

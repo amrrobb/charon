@@ -1,5 +1,5 @@
 import { setDefaultResultOrder } from 'node:dns';
-import { APP_NAME, SIGNAL_SERVER_URL, SIGNAL_POLL_MS, GRADUATED_POLL_MS, TRENDING_POLL_MS, POSITION_CHECK_MS, validateConfig } from './config.js';
+import { APP_NAME, SIGNAL_SERVER_URL, SIGNAL_POLL_MS, GRADUATED_POLL_MS, TRENDING_POLL_MS, POSITION_CHECK_MS, BC_WS_URL, validateConfig } from './config.js';
 import { initDb } from './db/connection.js';
 import { initLiveExecution } from './liveExecutor.js';
 import { setupTelegram } from './telegram/commands.js';
@@ -37,6 +37,17 @@ export async function startCharon() {
     setAlertHandler(processCandidateFromSignals);
     setInterval(() => trackDip(() => monitorPriceAlerts()), 10_000);
     setInterval(() => cleanupAlerts(), 60 * 60 * 1000);
+
+    // Bonding curve monitor: only runs when a DEDICATED Helius key is set
+    // (BC_HELIUS_API_KEY). Never shares the main bot's key — that firehose
+    // starved Meridian and tripped 429s (incident 2026-05-30, see LESSONS.md).
+    if (BC_WS_URL) {
+      const { startWebsocket } = await import('./signals/feeClaim.js');
+      startWebsocket(BC_WS_URL);
+      console.log('[bc] bonding curve monitor started (dedicated WS key)');
+    } else {
+      console.log('[bc] bonding curve monitor OFF (set BC_HELIUS_API_KEY to enable)');
+    }
 
     console.log(`[bot] ${APP_NAME} started (server mode: ${SIGNAL_SERVER_URL})`);
   } else {
