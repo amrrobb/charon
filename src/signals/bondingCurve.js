@@ -272,16 +272,22 @@ function handleTrade(event) {
     curve.sellCount += 1;
     curve.uniqueSellers.add(event.user);
   }
-  // Estimate mcap from virtual reserves. Price = vSol/vToken (SOL per token),
-  // mcap = price * 1B supply → in SOL. Store both SOL and USD (rough, fixed
-  // SOL price) so downstream return math can stay SOL-consistent.
-  if (event.virtualSolReserves && event.virtualTokenReserves) {
+  // Price/mcap from the trade's OWN fill: price = solAmount/tokenAmount
+  // (SOL per token), mcap = price * 1B supply. More reliable than virtual
+  // reserves (which parse as 0 for some event layouts). solAmount parses
+  // correctly — solIn accumulates sensibly. Fallback to reserves if needed.
+  const solAmt = lamToSol(Number(event.solAmount));
+  const tokAmt = Number(event.tokenAmount) / 1e6; // 6 decimals
+  if (tokAmt > 0 && solAmt > 0) {
+    const pricePerToken = solAmt / tokAmt;
+    curve.mcapSol = pricePerToken * 1_000_000_000;
+    curve.mcapEstimate = curve.mcapSol * SOL_USD_REF;
+  } else if (event.virtualSolReserves && event.virtualTokenReserves) {
     const vSol = lamToSol(Number(event.virtualSolReserves));
-    const vToken = Number(event.virtualTokenReserves) / 1e6; // token decimals = 6
+    const vToken = Number(event.virtualTokenReserves) / 1e6;
     if (vToken > 0) {
-      const pricePerToken = vSol / vToken;
-      curve.mcapSol = pricePerToken * 1_000_000_000;          // mcap in SOL
-      curve.mcapEstimate = curve.mcapSol * SOL_USD_REF;        // mcap in USD (rough)
+      curve.mcapSol = (vSol / vToken) * 1_000_000_000;
+      curve.mcapEstimate = curve.mcapSol * SOL_USD_REF;
     }
   }
   // Feed the path tracker if this mint is being measured
