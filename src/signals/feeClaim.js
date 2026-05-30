@@ -71,7 +71,7 @@ async function processLog(logInfo) {
 // Reconnect with exponential backoff + jitter + cap + circuit breaker.
 // Lesson L18: a fixed 5s reconnect with no backoff became a 15,692-attempt
 // DoS against our own Helius key when the WS hit 429. Never again.
-export function startWebsocket(wsUrl = SOLANA_WS_URL) {
+export function startWebsocket(wsUrl = SOLANA_WS_URL, { subscribeAll = false } = {}) {
   if (!wsUrl) {
     console.log('[ws] no WS URL configured, websocket disabled');
     return;
@@ -112,19 +112,34 @@ export function startWebsocket(wsUrl = SOLANA_WS_URL) {
       console.log('[ws] connected');
       attempt = 0;
       consecutive429 = 0;
-      for (const [id, program] of [[1, PUMP_PROGRAM], [2, PUMP_AMM]]) {
+      if (subscribeAll) {
+        // Provider ignores {mentions} (e.g. FluxRPC) — subscribe to the full
+        // firehose and filter client-side (see message handler pre-filter).
         ws.send(JSON.stringify({
-          jsonrpc: '2.0',
-          id,
-          method: 'logsSubscribe',
-          params: [{ mentions: [program] }, { commitment: 'confirmed' }],
+          jsonrpc: '2.0', id: 1, method: 'logsSubscribe', params: ['all'],
         }));
+        console.log('[ws] subscribed: logsSubscribe(all) + client-side pump filter');
+      } else {
+        for (const [id, program] of [[1, PUMP_PROGRAM], [2, PUMP_AMM]]) {
+          ws.send(JSON.stringify({
+            jsonrpc: '2.0',
+            id,
+            method: 'logsSubscribe',
+            params: [{ mentions: [program] }, { commitment: 'confirmed' }],
+          }));
+        }
       }
       pingTimer = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) ws.ping();
       }, 30_000);
     });
     ws.on('message', raw => {
+      // Cheap raw-substring pre-filter for the firehose path: ~97% of mainnet
+      // logs never mention the pump programs, so skip JSON.parse on those.
+      if (subscribeAll) {
+        const s = typeof raw === 'string' ? raw : raw.toString();
+        if (!s.includes(PUMP_PROGRAM) && !s.includes(PUMP_AMM)) return;
+      }
       let msg;
       try {
         msg = JSON.parse(raw);

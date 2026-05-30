@@ -24,9 +24,16 @@ export const SOLANA_WS_URL = process.env.SOLANA_WS_URL || `wss://mainnet.helius-
 // logsSubscribe stream from the main bot's key (shared with Meridian).
 // When unset, bonding curve monitoring stays OFF (no fallback to shared key).
 export const BC_HELIUS_API_KEY = process.env.BC_HELIUS_API_KEY || '';
-export const BC_WS_URL = BC_HELIUS_API_KEY
-  ? `wss://mainnet.helius-rpc.com/?api-key=${BC_HELIUS_API_KEY}`
-  : '';
+// BC_WS_URL can be set directly (e.g. FluxRPC: wss://ws.eu.fluxrpc.com?key=...).
+// Falls back to a Helius URL built from BC_HELIUS_API_KEY. When neither is set,
+// bonding curve monitoring stays OFF.
+export const BC_WS_URL = process.env.BC_WS_URL
+  || (BC_HELIUS_API_KEY ? `wss://mainnet.helius-rpc.com/?api-key=${BC_HELIUS_API_KEY}` : '');
+// FluxRPC (and some providers) accept logsSubscribe but ignore the {mentions:[...]}
+// filter — they only stream `["all"]`. When true, subscribe to the full firehose
+// and filter client-side with a cheap raw-substring check before parsing.
+// Helius honours mentions, so leave false for Helius keys.
+export const BC_WS_SUBSCRIBE_ALL = process.env.BC_WS_SUBSCRIBE_ALL === 'true';
 export const JUPITER_SWAP_BASE_URL = process.env.JUPITER_SWAP_BASE_URL || 'https://api.jup.ag/swap/v2';
 export const JUPITER_SLIPPAGE_BPS = Number(process.env.JUPITER_SLIPPAGE_BPS || 300);
 export const LIVE_MIN_SOL_RESERVE_LAMPORTS = Math.floor(Number(process.env.LIVE_MIN_SOL_RESERVE || 0.02) * 1_000_000_000);

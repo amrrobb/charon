@@ -1,5 +1,5 @@
 import { setDefaultResultOrder } from 'node:dns';
-import { APP_NAME, SIGNAL_SERVER_URL, SIGNAL_POLL_MS, GRADUATED_POLL_MS, TRENDING_POLL_MS, POSITION_CHECK_MS, BC_WS_URL, validateConfig } from './config.js';
+import { APP_NAME, SIGNAL_SERVER_URL, SIGNAL_POLL_MS, GRADUATED_POLL_MS, TRENDING_POLL_MS, POSITION_CHECK_MS, BC_WS_URL, BC_WS_SUBSCRIBE_ALL, validateConfig } from './config.js';
 import { initDb } from './db/connection.js';
 import { initLiveExecution } from './liveExecutor.js';
 import { setupTelegram } from './telegram/commands.js';
@@ -43,8 +43,8 @@ export async function startCharon() {
     // starved Meridian and tripped 429s (incident 2026-05-30, see LESSONS.md).
     if (BC_WS_URL) {
       const { startWebsocket } = await import('./signals/feeClaim.js');
-      startWebsocket(BC_WS_URL);
-      console.log('[bc] bonding curve monitor started (dedicated WS key)');
+      startWebsocket(BC_WS_URL, { subscribeAll: BC_WS_SUBSCRIBE_ALL });
+      console.log(`[bc] bonding curve monitor started (dedicated WS${BC_WS_SUBSCRIBE_ALL ? ', firehose+filter' : ''})`);
     } else {
       console.log('[bc] bonding curve monitor OFF (set BC_HELIUS_API_KEY to enable)');
     }
