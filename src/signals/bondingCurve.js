@@ -14,6 +14,118 @@ import { createHash } from 'crypto';
 import { now, pruneSeen, discMatch, readPubkey, readU64, readI64, lamToSol } from '../utils.js';
 import { storeSignalEvent } from './trending.js';
 import { sendTelegram } from '../telegram/send.js';
+import { db } from '../db/connection.js';
+
+// Phase 2.7: post-alert path tracking. For tokens crossing the track
+// threshold (netSol >= TRACK_NET_SOL), simulate SL + trailing exits live
+// off the TRADE event stream so we MEASURE real death-loss and achievable
+// exit instead of assuming them. No execution — pure measurement.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS bc_tracks (
+    mint TEXT PRIMARY KEY,
+    alert_at_ms INTEGER NOT NULL,
+    entry_mcap_sol REAL,
+    alert_net_sol REAL,
+    alert_sol_in REAL,
+    alert_vel REAL,
+    alert_bsr REAL,
+    alert_buyers INTEGER,
+    peak_mcap_sol REAL,
+    peak_ret_pct REAL,
+    sl_ret_pct REAL,
+    trail20_ret_pct REAL,
+    trail30_ret_pct REAL,
+    trail40_ret_pct REAL,
+    graduated INTEGER DEFAULT 0,
+    trade_count INTEGER DEFAULT 0,
+    last_mcap_sol REAL,
+    last_at_ms INTEGER,
+    ended_reason TEXT
+  );
+`);
+
+const TRACK_NET_SOL = Number(process.env.BC_TRACK_NET_SOL || 20);
+const SL_PCT = -20;
+const TRAILS = [20, 30, 40];
+const tracks = new Map(); // mint -> live track state
+const TRACK_TTL_MS = 60 * 60 * 1000; // measure up to 60 min post-alert
+
+function startTrack(curve, summary) {
+  if (tracks.has(curve.mint)) return;
+  const entry = curve.mcapSol || 0;
+  if (entry <= 0) return;
+  const t = {
+    mint: curve.mint,
+    alertAt: now(),
+    entryMcap: entry,
+    netSol: summary.netSol,
+    solIn: summary.solIn,
+    vel: summary.velocitySolPerMin,
+    bsr: summary.buySellRatio,
+    buyers: summary.uniqueBuyers,
+    peak: entry,
+    slRet: null,
+    trailRet: { 20: null, 30: null, 40: null },
+    graduated: false,
+    tradeCount: 0,
+    lastMcap: entry,
+  };
+  tracks.set(curve.mint, t);
+  db.prepare(`
+    INSERT OR IGNORE INTO bc_tracks
+      (mint, alert_at_ms, entry_mcap_sol, alert_net_sol, alert_sol_in, alert_vel, alert_bsr, alert_buyers, peak_mcap_sol, last_mcap_sol, last_at_ms)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(t.mint, t.alertAt, entry, t.netSol, t.solIn, t.vel, t.bsr, t.buyers, entry, entry, t.alertAt);
+}
+
+function updateTrack(mint, mcapSol) {
+  const t = tracks.get(mint);
+  if (!t || !(mcapSol > 0)) return;
+  t.tradeCount += 1;
+  t.lastMcap = mcapSol;
+  if (mcapSol > t.peak) t.peak = mcapSol;
+  const retFromEntry = (mcapSol / t.entryMcap - 1) * 100;
+  // SL from entry
+  if (t.slRet === null && retFromEntry <= SL_PCT) t.slRet = retFromEntry;
+  // Trailing from peak (only after armed = peak above entry)
+  for (const trail of TRAILS) {
+    if (t.trailRet[trail] === null) {
+      const dropFromPeak = (mcapSol / t.peak - 1) * 100;
+      if (t.peak > t.entryMcap && dropFromPeak <= -trail) {
+        t.trailRet[trail] = retFromEntry;
+      }
+    }
+  }
+  persistTrack(t);
+}
+
+function persistTrack(t, reason = null) {
+  const peakRet = (t.peak / t.entryMcap - 1) * 100;
+  db.prepare(`
+    UPDATE bc_tracks SET
+      peak_mcap_sol=?, peak_ret_pct=?, sl_ret_pct=?,
+      trail20_ret_pct=?, trail30_ret_pct=?, trail40_ret_pct=?,
+      graduated=?, trade_count=?, last_mcap_sol=?, last_at_ms=?, ended_reason=?
+    WHERE mint=?
+  `).run(t.peak, peakRet, t.slRet, t.trailRet[20], t.trailRet[30], t.trailRet[40],
+    t.graduated ? 1 : 0, t.tradeCount, t.lastMcap, now(), reason, t.mint);
+}
+
+function endTrack(mint, reason) {
+  const t = tracks.get(mint);
+  if (!t) return;
+  t.graduated = t.graduated || reason === 'graduated';
+  persistTrack(t, reason);
+  tracks.delete(mint);
+}
+
+function pruneTracks() {
+  const cutoff = now() - TRACK_TTL_MS;
+  for (const [mint, t] of tracks) {
+    if (t.alertAt < cutoff) endTrack(mint, 'ttl');
+  }
+}
+setInterval(pruneTracks, 60_000);
 
 function anchorDisc(eventName) {
   return Buffer.from(createHash('sha256').update(`global:${eventName}`).digest()).subarray(0, 8);
@@ -172,6 +284,8 @@ function handleTrade(event) {
       curve.mcapEstimate = curve.mcapSol * SOL_USD_REF;        // mcap in USD (rough)
     }
   }
+  // Feed the path tracker if this mint is being measured
+  if (curve.mcapSol > 0) updateTrack(event.mint, curve.mcapSol);
   checkThresholds(curve);
 }
 
@@ -183,6 +297,7 @@ function handleComplete(data) {
     const mint = readPubkey(data, offset);
     const curve = curves.get(mint);
     if (curve) curve.graduated = true;
+    endTrack(mint, 'graduated');
     console.log(`[bc] GRADUATED: ${mint.slice(0, 8)}... ${curve?.symbol || '?'} (${curve?.solIn.toFixed(2)} SOL in, ${curve?.uniqueBuyers.size} buyers)`);
   } catch {}
 }
@@ -221,6 +336,9 @@ async function checkThresholds(curve) {
   console.log(`[bc] ALERT: ${curve.symbol || curve.mint.slice(0, 8)} | ${curve.solIn.toFixed(1)} SOL in ${(age/1000).toFixed(0)}s | ${curve.uniqueBuyers.size} buyers | vel ${velocity.toFixed(2)} SOL/min | mcap ~$${curve.mcapEstimate.toFixed(0)}`);
 
   storeSignalEvent(curve.mint, 'bonding_curve_velocity', 'pump_logs', summary);
+
+  // Phase 2.7: start path tracking for the promising subset (netSol >= threshold)
+  if (summary.netSol >= TRACK_NET_SOL) startTrack(curve, summary);
 
   // Telegram alert (rate-limited)
   if (now() - lastAlertMs > ALERT_COOLDOWN_MS) {
@@ -266,5 +384,35 @@ export function bondingCurveStats() {
     activeCurves: curves.size,
     alertCount,
     graduated: [...curves.values()].filter(c => c.graduated).length,
+    tracking: tracks.size,
   };
+}
+
+// Phase 2.7 measured results: realized return distribution per trailing config
+export function bcTrackStats() {
+  const rows = db.prepare(`
+    SELECT graduated, sl_ret_pct, trail20_ret_pct, trail30_ret_pct, trail40_ret_pct,
+           peak_ret_pct, ended_reason
+    FROM bc_tracks WHERE ended_reason IS NOT NULL
+  `).all();
+  if (!rows.length) return { n: 0 };
+  // Realized return per token under each exit policy:
+  //   sl hit first → sl_ret; else trailing hit → trail_ret; else final peak-ish.
+  function realized(r, trailCol) {
+    const sl = r.sl_ret_pct;
+    const tr = r[trailCol];
+    // Whichever triggered (both are first-touch). If neither, token still
+    // running or graduated — approximate with peak * 0.7 (held to end).
+    const candidates = [sl, tr].filter(v => v !== null);
+    if (candidates.length) return Math.max(...candidates); // trailing usually > sl
+    return (r.peak_ret_pct || 0) * 0.7;
+  }
+  const policies = { trail20: 'trail20_ret_pct', trail30: 'trail30_ret_pct', trail40: 'trail40_ret_pct' };
+  const out = { n: rows.length, graduated: rows.filter(r => r.graduated).length };
+  for (const [name, col] of Object.entries(policies)) {
+    const rets = rows.map(r => realized(r, col));
+    const avg = rets.reduce((a, b) => a + b, 0) / rets.length;
+    out[name] = { avg };
+  }
+  return out;
 }

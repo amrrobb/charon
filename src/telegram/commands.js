@@ -29,7 +29,7 @@ import { handleCallback, editMenuMessage } from './callbacks.js';
 import { consumeNumericFilterInput } from './input.js';
 import { runLearning, sendLessons } from '../learning/commands.js';
 import { buildDailySummary, formatDailySummary } from '../learning/dailySummary.js';
-import { bondingCurveStats } from '../signals/bondingCurve.js';
+import { bondingCurveStats, bcTrackStats } from '../signals/bondingCurve.js';
 import { fetchWalletPnl } from '../enrichment/wallets.js';
 import { sendDaily, sendDayDetail } from './daily.js';
 
@@ -100,9 +100,22 @@ export async function handleMessage(msg) {
   if (text.startsWith('/summary')) {
     return bot.sendMessage(chatId, formatDailySummary(buildDailySummary()), { parse_mode: 'HTML' });
   }
+  if (text.startsWith('/bctracks')) {
+    const t = bcTrackStats();
+    if (!t.n) return bot.sendMessage(chatId, '📊 No completed path tracks yet (need 60min post-alert).');
+    const lines = [
+      `📊 <b>BC Path Tracks (measured)</b>`,
+      `Completed: ${t.n}  Graduated: ${t.graduated} (${(t.graduated / t.n * 100).toFixed(1)}%)`,
+      `Realized avg return per trade (entry at alert, -20% SL):`,
+      `  trail 20%: ${t.trail20.avg >= 0 ? '+' : ''}${t.trail20.avg.toFixed(1)}%`,
+      `  trail 30%: ${t.trail30.avg >= 0 ? '+' : ''}${t.trail30.avg.toFixed(1)}%`,
+      `  trail 40%: ${t.trail40.avg >= 0 ? '+' : ''}${t.trail40.avg.toFixed(1)}%`,
+    ];
+    return bot.sendMessage(chatId, lines.join('\n'), { parse_mode: 'HTML' });
+  }
   if (text.startsWith('/bc')) {
     const s = bondingCurveStats();
-    return bot.sendMessage(chatId, `📈 <b>Bonding Curve Monitor</b>\nActive curves: ${s.activeCurves}\nAlerts fired: ${s.alertCount}\nGraduations seen: ${s.graduated}`, { parse_mode: 'HTML' });
+    return bot.sendMessage(chatId, `📈 <b>Bonding Curve Monitor</b>\nActive curves: ${s.activeCurves}\nAlerts fired: ${s.alertCount}\nGraduations seen: ${s.graduated}\nPath tracking: ${s.tracking}`, { parse_mode: 'HTML' });
   }
   if (text.startsWith('/candidate')) {
     const mint = text.split(/\s+/)[1];
