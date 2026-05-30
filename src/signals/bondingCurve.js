@@ -36,6 +36,7 @@ const DISC_COMPLETE_EVENT = Buffer.from(createHash('sha256').update('event:Compl
 const curves = new Map();
 const MAX_CURVES = 5000;
 const CURVE_TTL_MS = 30 * 60 * 1000; // drop curves after 30min of no activity
+const SOL_USD_REF = Number(process.env.SOL_USD_REF || 170); // rough USD conv for display only
 
 let candidateHandler = null;
 export function setBondingCurveHandler(fn) { candidateHandler = fn; }
@@ -159,13 +160,16 @@ function handleTrade(event) {
     curve.sellCount += 1;
     curve.uniqueSellers.add(event.user);
   }
-  // Estimate mcap from virtual reserves
+  // Estimate mcap from virtual reserves. Price = vSol/vToken (SOL per token),
+  // mcap = price * 1B supply → in SOL. Store both SOL and USD (rough, fixed
+  // SOL price) so downstream return math can stay SOL-consistent.
   if (event.virtualSolReserves && event.virtualTokenReserves) {
     const vSol = lamToSol(Number(event.virtualSolReserves));
     const vToken = Number(event.virtualTokenReserves) / 1e6; // token decimals = 6
     if (vToken > 0) {
       const pricePerToken = vSol / vToken;
-      curve.mcapEstimate = pricePerToken * 1_000_000_000; // total supply ~1B
+      curve.mcapSol = pricePerToken * 1_000_000_000;          // mcap in SOL
+      curve.mcapEstimate = curve.mcapSol * SOL_USD_REF;        // mcap in USD (rough)
     }
   }
   checkThresholds(curve);
@@ -211,6 +215,7 @@ async function checkThresholds(curve) {
     velocitySolPerMin: velocity,
     buySellRatio,
     mcapEstimate: curve.mcapEstimate,
+    mcapSol: curve.mcapSol || 0,
   };
 
   console.log(`[bc] ALERT: ${curve.symbol || curve.mint.slice(0, 8)} | ${curve.solIn.toFixed(1)} SOL in ${(age/1000).toFixed(0)}s | ${curve.uniqueBuyers.size} buyers | vel ${velocity.toFixed(2)} SOL/min | mcap ~$${curve.mcapEstimate.toFixed(0)}`);
