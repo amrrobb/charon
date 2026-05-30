@@ -337,8 +337,9 @@ async function checkThresholds(curve) {
 
   storeSignalEvent(curve.mint, 'bonding_curve_velocity', 'pump_logs', summary);
 
-  // Phase 2.7: start path tracking for the promising subset (netSol >= threshold)
-  if (summary.netSol >= TRACK_NET_SOL) startTrack(curve, summary);
+  // Phase 2.7: track EVERY alert's path (records alert_net_sol so analysis
+  // can slice by any threshold). Tracking is measurement-only and cheap.
+  startTrack(curve, summary);
 
   // Telegram alert (rate-limited)
   if (now() - lastAlertMs > ALERT_COOLDOWN_MS) {
