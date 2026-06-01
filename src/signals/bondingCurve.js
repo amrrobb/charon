@@ -15,6 +15,7 @@ import { now, pruneSeen, discMatch, readPubkey, readU64, readI64, lamToSol } fro
 import { storeSignalEvent } from './trending.js';
 import { sendTelegram } from '../telegram/send.js';
 import { db } from '../db/connection.js';
+import { setting, setSetting } from '../db/settings.js';
 
 // Phase 2.7: post-alert path tracking. For tokens crossing the track
 // threshold (netSol >= TRACK_NET_SOL), simulate SL + trailing exits live
@@ -43,6 +44,10 @@ db.exec(`
     ended_reason TEXT
   );
 `);
+// Liquidity-depth proxy (net SOL in the curve at last observed trade) so exit
+// fills can be modeled against book depth, not detection-time price (loss-side
+// realism — rugged tokens have collapsed depth). Migrate existing tables.
+try { db.exec('ALTER TABLE bc_tracks ADD COLUMN last_curve_sol REAL'); } catch { /* column exists */ }
 
 const TRACK_NET_SOL = Number(process.env.BC_TRACK_NET_SOL || 20);
 const SL_PCT = -20;
@@ -50,34 +55,48 @@ const TRAILS = [20, 30, 40];
 const tracks = new Map(); // mint -> live track state
 const TRACK_TTL_MS = 60 * 60 * 1000; // measure up to 60 min post-alert
 
-// Burst budget: stop the WS after collecting enough netSol>=TRACK_NET_SOL tracks
-// or after a time cap, so a free key can't be silently drained by a 24/7
-// firehose (L20/L21). 0 = disabled (run continuously).
-const BURST_NETSOL_TARGET = Number(process.env.BC_BURST_NETSOL_TARGET || 0);
+// Burst budget: stop the WS after the bc_tracks table holds enough
+// netSol>=TRACK_NET_SOL rows (ABSOLUTE, DB-backed) or after a wall-clock
+// deadline — both survive process restarts (L20/L21: an in-memory counter +
+// setTimeout reset on every restart and let the monitor run for hours, draining
+// a free key). 0 = disabled (run continuously).
+const BURST_NETSOL_TARGET = Number(process.env.BC_BURST_NETSOL_TARGET || 0);  // absolute row count in DB
 const BURST_MAX_MS = Number(process.env.BC_BURST_MAX_MS || 0);
-let burstNetSolCount = 0;
 let burstStop = null;
+
+function netSolRowCount() {
+  return db.prepare('SELECT COUNT(*) n FROM bc_tracks WHERE alert_net_sol >= ?').get(TRACK_NET_SOL).n;
+}
+function checkBurstBudget() {
+  if (!burstStop) return;
+  if (BURST_NETSOL_TARGET > 0) {
+    const n = netSolRowCount();
+    if (n >= BURST_NETSOL_TARGET) {
+      console.log(`[bc] burst target reached (${n} netSol>=${TRACK_NET_SOL} rows >= ${BURST_NETSOL_TARGET}) — stopping WS`);
+      burstStop(`netSol target ${BURST_NETSOL_TARGET}`); burstStop = null; return;
+    }
+  }
+  const deadline = Number(setting('bc_burst_deadline_ms', '0'));
+  if (deadline > 0 && now() > deadline) {
+    console.log(`[bc] burst deadline passed — stopping WS`);
+    burstStop('time deadline'); burstStop = null;
+  }
+}
 export function setBurstStop(fn) {
   burstStop = fn;
-  if (BURST_MAX_MS > 0 && fn) {
-    setTimeout(() => {
-      if (burstStop) { burstStop(`burst time cap ${Math.round(BURST_MAX_MS / 60000)}min`); burstStop = null; }
-    }, BURST_MAX_MS);
+  if (!fn) return;
+  // Persist an absolute deadline ONCE (survives restarts). Don't reset it on reboot.
+  if (BURST_MAX_MS > 0 && Number(setting('bc_burst_deadline_ms', '0')) <= 0) {
+    setSetting('bc_burst_deadline_ms', now() + BURST_MAX_MS);
   }
+  checkBurstBudget();                 // already over budget? stop immediately on boot
+  setInterval(checkBurstBudget, 60_000); // backstop so the deadline fires even with no new tracks
 }
 
 function startTrack(curve, summary) {
   if (tracks.has(curve.mint)) return;
   const entry = curve.mcapSol || 0;
   if (entry <= 0) return;
-  if (summary.netSol >= TRACK_NET_SOL) {
-    burstNetSolCount += 1;
-    if (burstStop && BURST_NETSOL_TARGET > 0 && burstNetSolCount >= BURST_NETSOL_TARGET) {
-      console.log(`[bc] burst target reached (${burstNetSolCount} netSol>=${TRACK_NET_SOL} tracks) — stopping WS`);
-      burstStop(`burst netSol target ${BURST_NETSOL_TARGET}`);
-      burstStop = null;
-    }
-  }
   const t = {
     mint: curve.mint,
     alertAt: now(),
@@ -93,20 +112,23 @@ function startTrack(curve, summary) {
     graduated: false,
     tradeCount: 0,
     lastMcap: entry,
+    lastCurveSol: summary.netSol,
   };
   tracks.set(curve.mint, t);
   db.prepare(`
     INSERT OR IGNORE INTO bc_tracks
-      (mint, alert_at_ms, entry_mcap_sol, alert_net_sol, alert_sol_in, alert_vel, alert_bsr, alert_buyers, peak_mcap_sol, last_mcap_sol, last_at_ms)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(t.mint, t.alertAt, entry, t.netSol, t.solIn, t.vel, t.bsr, t.buyers, entry, entry, t.alertAt);
+      (mint, alert_at_ms, entry_mcap_sol, alert_net_sol, alert_sol_in, alert_vel, alert_bsr, alert_buyers, peak_mcap_sol, last_mcap_sol, last_at_ms, last_curve_sol)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(t.mint, t.alertAt, entry, t.netSol, t.solIn, t.vel, t.bsr, t.buyers, entry, entry, t.alertAt, t.lastCurveSol);
+  checkBurstBudget(); // restart-safe stop check (DB row count + deadline)
 }
 
-function updateTrack(mint, mcapSol) {
+function updateTrack(mint, mcapSol, curveSol) {
   const t = tracks.get(mint);
   if (!t || !(mcapSol > 0)) return;
   t.tradeCount += 1;
   t.lastMcap = mcapSol;
+  if (curveSol !== undefined && curveSol !== null) t.lastCurveSol = curveSol;
   if (mcapSol > t.peak) t.peak = mcapSol;
   const retFromEntry = (mcapSol / t.entryMcap - 1) * 100;
   // SL from entry
@@ -129,10 +151,10 @@ function persistTrack(t, reason = null) {
     UPDATE bc_tracks SET
       peak_mcap_sol=?, peak_ret_pct=?, sl_ret_pct=?,
       trail20_ret_pct=?, trail30_ret_pct=?, trail40_ret_pct=?,
-      graduated=?, trade_count=?, last_mcap_sol=?, last_at_ms=?, ended_reason=?
+      graduated=?, trade_count=?, last_mcap_sol=?, last_at_ms=?, last_curve_sol=?, ended_reason=?
     WHERE mint=?
   `).run(t.peak, peakRet, t.slRet, t.trailRet[20], t.trailRet[30], t.trailRet[40],
-    t.graduated ? 1 : 0, t.tradeCount, t.lastMcap, now(), reason, t.mint);
+    t.graduated ? 1 : 0, t.tradeCount, t.lastMcap, now(), t.lastCurveSol ?? null, reason, t.mint);
 }
 
 function endTrack(mint, reason) {
@@ -314,8 +336,9 @@ function handleTrade(event) {
       curve.mcapEstimate = curve.mcapSol * SOL_USD_REF;
     }
   }
-  // Feed the path tracker if this mint is being measured
-  if (curve.mcapSol > 0) updateTrack(event.mint, curve.mcapSol);
+  // Feed the path tracker if this mint is being measured (pass curve depth =
+  // net SOL in the curve, as the exit-fill liquidity proxy)
+  if (curve.mcapSol > 0) updateTrack(event.mint, curve.mcapSol, curve.solIn - curve.solOut);
   checkThresholds(curve);
 }
 
