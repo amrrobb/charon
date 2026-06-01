@@ -161,6 +161,16 @@ A full multi-agent review of the repo (intent + public/private boundary + missin
 
 **The takeaway:** no amount of degen entry-filter/exit tuning could ever have worked — it optimizes the LLM-bypassing crude floor against a signal mix whose quality is owned by someone else. The honest fork: (a) get signal-server access and benchmark sniper+LLM as designed, or (b) declare the public client non-viable standalone. The one genuinely buildable net-new edge that doesn't need the server is **dev/creator-wallet dump detection as a post-entry EXIT signal** (completely ABSENT; it's the #1 Pump.fun rug signal and, as an exit, sidesteps the moonshot-clipping that doomed every entry filter).
 
+## L23. We already had the keys — and never ran the real strategy. (Roadmap review, 2026-06-01)
+A judge-panel design workflow (4 strategies, scored synthesis, 3 adversarial stress-tests — one returned survives:FALSE) corrected several beliefs and set the path forward (full plan: .context/ROADMAP.md):
+- **Signal-server access is LIVE.** `SIGNAL_SERVER_URL`/`SIGNAL_SERVER_KEY` are set in the VPS `.env` and `/api/signals` returns 200. We were never missing the owner's feed — we consumed it the whole time, but routed it through `degen` (use_llm:false, loose gates) instead of the owner's designed-to-win `sniper` (require_fee_claim:true, min_source_count:2, use_llm:true, seeded enabled=1). **The sniper+LLM path has NEVER run.** First move: run it in dry_run — FREE, zero new code.
+- **Meridian is NOT pump alpha.** Verified: it's a PAPER Meteora-DLMM agent that never went live; `deployer-blacklist.json` is EMPTY. Harvest its plumbing (Claude client, blocklist load/save pattern) only — its trading brain transfers zero alpha. (Earlier "Meridian already solved dev tracking" was wrong.)
+- **Dry-run PF overstates live PF.** `positions.js:43` records entry_price = candidate quote (zero slippage, no gas/priority). Treat dry-run as an UPPER BOUND; require a margin (e.g. dry-run ≥1.3x to believe >1.0x live).
+- **Corrected GO bar:** PF base > **1.0x NET of gas+priority+slippage** — NOT "beat the 0.73x degen floor" (beating a designed-to-lose floor proves nothing).
+- **The creator-dump EXIT is more fragile than it looked:** no creator-wallet WS = no latency edge over PANIC_SL/LIQ_DRAIN (same 10s poll); sampled graduated tokens show `devHoldingsPercent:0` (dev already out before we see the token — may fire on an empty set); conditioned-dump cases have collapsed liquidity so modeled FILL (not detection price) may beat existing stops by ~zero. Precondition-check on backfill BEFORE building. L11: 94% of moonshots had dev already sold — naive "dev sold = exit" clips 94% of winners.
+- **Hard prerequisite before any new RPC poller:** isolate a dedicated Charon execution key — new consumers default to Meridian's shared key (config.js:21), re-arming L16/L20/L21.
+- **Add a STOP gate above everything:** if neither track clears PF>1.0x net within N days, shut down and don't trade. A 30s-poll + LLM-batch + Jupiter client has neither known edge (block-time speed, private order flow) in a 98.6%-rug arena. Run Phase 0 expecting it might say STOP — and obey it.
+
 ## Pre-conditions for the next optimization attempt
 
 1. Expand `snapshot_json` capture: ✅ DONE (entrySignals block, commit b82c4e9).
