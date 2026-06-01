@@ -80,6 +80,7 @@ export function startWebsocket(wsUrl = SOLANA_WS_URL, { subscribeAll = false } =
   let pingTimer;
   let attempt = 0;
   let consecutive429 = 0;
+  let stopped = false; // set by stop() — burst budget reached; do not reconnect
   const BASE_DELAY = 5000;
   const MAX_DELAY = 120_000;        // cap at 2 min
   const CIRCUIT_BREAK_429 = 20;     // after 20 consecutive 429s, stop trying for a long while
@@ -93,6 +94,7 @@ export function startWebsocket(wsUrl = SOLANA_WS_URL, { subscribeAll = false } =
   }
 
   function scheduleReconnect(rateLimited) {
+    if (stopped) return; // burst budget reached — stay down
     if (rateLimited && consecutive429 >= CIRCUIT_BREAK_429) {
       console.log(`[ws] circuit breaker tripped (${consecutive429} consecutive 429s) — pausing ${CIRCUIT_COOLDOWN / 60000}min`);
       consecutive429 = 0;
@@ -165,4 +167,16 @@ export function startWebsocket(wsUrl = SOLANA_WS_URL, { subscribeAll = false } =
     ws.on('error', error => console.log(`[ws] ${error.message}`));
   }
   connect();
+
+  // Burst budget control (L20/L21): close the WS and never reconnect once the
+  // caller decides enough data is collected — prevents a continuous firehose
+  // from silently draining a free key/credit budget.
+  function stop(reason = 'budget') {
+    if (stopped) return;
+    stopped = true;
+    clearInterval(pingTimer);
+    try { ws?.close(); } catch {}
+    console.log(`[ws] stopped (${reason}) — no further reconnect`);
+  }
+  return { stop };
 }

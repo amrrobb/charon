@@ -50,10 +50,34 @@ const TRAILS = [20, 30, 40];
 const tracks = new Map(); // mint -> live track state
 const TRACK_TTL_MS = 60 * 60 * 1000; // measure up to 60 min post-alert
 
+// Burst budget: stop the WS after collecting enough netSol>=TRACK_NET_SOL tracks
+// or after a time cap, so a free key can't be silently drained by a 24/7
+// firehose (L20/L21). 0 = disabled (run continuously).
+const BURST_NETSOL_TARGET = Number(process.env.BC_BURST_NETSOL_TARGET || 0);
+const BURST_MAX_MS = Number(process.env.BC_BURST_MAX_MS || 0);
+let burstNetSolCount = 0;
+let burstStop = null;
+export function setBurstStop(fn) {
+  burstStop = fn;
+  if (BURST_MAX_MS > 0 && fn) {
+    setTimeout(() => {
+      if (burstStop) { burstStop(`burst time cap ${Math.round(BURST_MAX_MS / 60000)}min`); burstStop = null; }
+    }, BURST_MAX_MS);
+  }
+}
+
 function startTrack(curve, summary) {
   if (tracks.has(curve.mint)) return;
   const entry = curve.mcapSol || 0;
   if (entry <= 0) return;
+  if (summary.netSol >= TRACK_NET_SOL) {
+    burstNetSolCount += 1;
+    if (burstStop && BURST_NETSOL_TARGET > 0 && burstNetSolCount >= BURST_NETSOL_TARGET) {
+      console.log(`[bc] burst target reached (${burstNetSolCount} netSol>=${TRACK_NET_SOL} tracks) — stopping WS`);
+      burstStop(`burst netSol target ${BURST_NETSOL_TARGET}`);
+      burstStop = null;
+    }
+  }
   const t = {
     mint: curve.mint,
     alertAt: now(),

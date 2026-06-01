@@ -43,8 +43,10 @@ export async function startCharon() {
     // starved Meridian and tripped 429s (incident 2026-05-30, see LESSONS.md).
     if (BC_WS_URL) {
       const { startWebsocket } = await import('./signals/feeClaim.js');
-      startWebsocket(BC_WS_URL, { subscribeAll: BC_WS_SUBSCRIBE_ALL });
-      console.log(`[bc] bonding curve monitor started (dedicated WS${BC_WS_SUBSCRIBE_ALL ? ', firehose+filter' : ''})`);
+      const { setBurstStop } = await import('./signals/bondingCurve.js');
+      const handle = startWebsocket(BC_WS_URL, { subscribeAll: BC_WS_SUBSCRIBE_ALL });
+      if (handle?.stop) setBurstStop(handle.stop); // enforce BC_BURST_* budget if set
+      console.log(`[bc] bonding curve monitor started (dedicated WS${BC_WS_SUBSCRIBE_ALL ? ', firehose+filter' : ', mentions'})`);
     } else {
       console.log('[bc] bonding curve monitor OFF (set BC_HELIUS_API_KEY to enable)');
     }
