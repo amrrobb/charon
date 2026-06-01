@@ -171,6 +171,19 @@ A judge-panel design workflow (4 strategies, scored synthesis, 3 adversarial str
 - **Hard prerequisite before any new RPC poller:** isolate a dedicated Charon execution key — new consumers default to Meridian's shared key (config.js:21), re-arming L16/L20/L21.
 - **Add a STOP gate above everything:** if neither track clears PF>1.0x net within N days, shut down and don't trade. A 30s-poll + LLM-batch + Jupiter client has neither known edge (block-time speed, private order flow) in a 98.6%-rug arena. Run Phase 0 expecting it might say STOP — and obey it.
 
+## L24. Per-strategy data review: the "sniper never ran / is the untested winner" thesis is FALSE. (2026-06-01)
+Queried `dry_run_positions` by `strategy_id`. Closed-trade performance:
+| strategy | n | WR% | avg | PF base | cat% | period |
+|---|---|---|---|---|---|---|
+| **sniper** | 81 | 32.1 | −8.4% | **0.34** | 33.3 | 05-11→05-17 (FIRST week) |
+| degen | 1454 | 26.7 | −3.3% | 0.74 | 10.4 | 05-16→05-27 |
+| degen_sw_v1 | 597 | 29.3 | −2.0% | **0.82** (best) | 10.4 | 05-27→06-01 |
+| degen_filtered_v1 | 55 | 25.5 | −0.3% | 0.59 | 3.6 | — |
+| degen_favor_v1 | 95 | 22.1 | −4.6% | 0.56 | 7.4 | — |
+- **`sniper` + LLM WAS tested** — 81 trades over the project's first week, with the LLM active (1,822 `llm_decisions` and ALL 1,700 `llm_batches` fall in that window; batches stopped once degen/use_llm:false took over). The roadmap/panel claim "the designed-to-win sniper+LLM path has never once run" is empirically **false**. (smart_money and dip_buy genuinely never ran.)
+- **But it's not a clean test, AND it still lost.** The live sniper row that ran had `sl_percent:-75` and **no panic_sl/liq_drain** (those rug protections didn't exist yet in that early regime), plus a different mcap band (50K–500K). That broke exits explain much of the 33% cat rate (only 6/81 hit the −75 SL). HOWEVER, normalizing losses to a proper −25% SL only lifts sniper from −8.4% → **−3.4% avg ≈ degen's −3.3%**. So the **LLM screening added NO edge** — the "quality" path is no better than the crude floor once exits are equalized.
+- **Implication for the roadmap:** Phase 0 was framed as "run the never-tested winner." Correction: it was tested, the LLM didn't help, and every strategy in the client is −EV (best is degen_sw_v1 at PF base 0.82, still <1.0x). The edge is **absent, not mis-selected.** A clean apples-to-apples sniper re-run (sniper entry + LLM + the CURRENT hardened exit stack) is still worth one cheap pass since the original had broken exits — but expectations are low (~−3.4% normalized), and this materially raises the weight on the STOP gate (L23). Do NOT assert sniper is the untested path to profit.
+
 ## Pre-conditions for the next optimization attempt
 
 1. Expand `snapshot_json` capture: ✅ DONE (entrySignals block, commit b82c4e9).
