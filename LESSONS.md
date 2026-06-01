@@ -184,6 +184,19 @@ Queried `dry_run_positions` by `strategy_id`. Closed-trade performance:
 - **But it's not a clean test, AND it still lost.** The live sniper row that ran had `sl_percent:-75` and **no panic_sl/liq_drain** (those rug protections didn't exist yet in that early regime), plus a different mcap band (50K–500K). That broke exits explain much of the 33% cat rate (only 6/81 hit the −75 SL). HOWEVER, normalizing losses to a proper −25% SL only lifts sniper from −8.4% → **−3.4% avg ≈ degen's −3.3%**. So the **LLM screening added NO edge** — the "quality" path is no better than the crude floor once exits are equalized.
 - **Implication for the roadmap:** Phase 0 was framed as "run the never-tested winner." Correction: it was tested, the LLM didn't help, and every strategy in the client is −EV (best is degen_sw_v1 at PF base 0.82, still <1.0x). The edge is **absent, not mis-selected.** A clean apples-to-apples sniper re-run (sniper entry + LLM + the CURRENT hardened exit stack) is still worth one cheap pass since the original had broken exits — but expectations are low (~−3.4% normalized), and this materially raises the weight on the STOP gate (L23). Do NOT assert sniper is the untested path to profit.
 
+## L25. The early-entry (BC netSol≥20) signal PASSED an honest out-of-sample gate — the project's first. (2026-06-01)
+Validated `bc_tracks` netSol≥20 at n=38 clean ended tracks (up from 27), pre-committed gate = trail30 / 6% haircut / PF>1.0x NET & avg>0:
+| exit | flat 6% | flat 12% | depth-aware |
+|---|---|---|---|
+| **trail30** | **PF 1.66, avg +11.5%, WR 39%** | **1.26** | **1.44** |
+| trail20 | 1.07 | 0.73 | 0.89 |
+| trail40 | 1.06 | 0.84 | 0.94 |
+- **trail30 clears >1.0x under every cost model** (flat 6/12% and the new depth-aware book-fill via `last_curve_sol`). Held across three windows: 6%-haircut PF went 1.88 (n=27) → 1.66 (n=38) — DECAYED as expected out-of-sample but did NOT collapse. This is the first signal in the project to survive an honest, cost-adjusted, out-of-sample bar (degen 0.74, sniper 0.34, all entry filters <baseline).
+- WR ~39% vs 27% baseline = the netSol filter genuinely SELECTS better tokens (43% graduation vs 5%), not tail-clipping.
+- **Caveats:** only trail30 works (trail20/40 marginal — result is exit-param sensitive, though trail30 was best at all three sample sizes, so consistent not cherry-picked); depth-proxy coverage only 11/38 (rest fall back to flat 6%); n=38 is modest.
+- **The wall:** "signal validated" ≠ "tradeable." Executing early entry needs on-bonding-curve BUY code that does not exist (buying only at graduation throws away the edge). That execution gap — not signal quality — is the next obstacle, and the only one now worth building toward.
+- **Infra:** ran on Helius mentions mode (~24 GB/day, ~8× lighter than the FluxRPC firehose that died), with the now-restart-safe auto-stop (DB row-count + persisted deadline) — confirmed working: it fired immediately on a reboot when the DB already held 55≥45. Credits bounded, key healthy. The L20/L21 drain pattern is fixed.
+
 ## Pre-conditions for the next optimization attempt
 
 1. Expand `snapshot_json` capture: ✅ DONE (entrySignals block, commit b82c4e9).
