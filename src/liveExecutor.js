@@ -69,6 +69,10 @@ async function jupiterOrder({ inputMint, outputMint, amount }) {
   url.searchParams.set('outputMint', outputMint);
   url.searchParams.set('amount', String(amount));
   url.searchParams.set('taker', liveWallet.publicKey.toBase58());
+  // Cap slippage instead of accepting Jupiter's unbounded default — on illiquid
+  // meme tokens an uncapped fill silently eats huge slippage (confirmed bug:
+  // JUPITER_SLIPPAGE_BPS was imported but never applied). 0 = let Jupiter decide.
+  if (JUPITER_SLIPPAGE_BPS > 0) url.searchParams.set('slippageBps', String(JUPITER_SLIPPAGE_BPS));
   const res = await axios.get(url.toString(), {
     timeout: 20_000,
     headers: { ...JSON_HEADERS, 'x-api-key': JUPITER_API_KEY },

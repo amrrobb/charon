@@ -48,8 +48,15 @@ db.exec(`
 // fills can be modeled against book depth, not detection-time price (loss-side
 // realism — rugged tokens have collapsed depth). Migrate existing tables.
 try { db.exec('ALTER TABLE bc_tracks ADD COLUMN last_curve_sol REAL'); } catch { /* column exists */ }
+// Entry-latency realism: the validated PF assumes we fill at the ALERT price.
+// In reality we detect, then a buy lands a few seconds later — into a rising
+// curve, at a worse price. Capture the price BC_ENTRY_DELAY_MS after alert so
+// analysis can charge that entry-slip and test whether the edge survives
+// realistic fill latency (the go/no-go before building live execution).
+try { db.exec('ALTER TABLE bc_tracks ADD COLUMN entry_delayed_mcap_sol REAL'); } catch { /* column exists */ }
 
 const TRACK_NET_SOL = Number(process.env.BC_TRACK_NET_SOL || 20);
+const ENTRY_DELAY_MS = Number(process.env.BC_ENTRY_DELAY_MS || 5000);
 const SL_PCT = -20;
 const TRAILS = [20, 30, 40];
 const tracks = new Map(); // mint -> live track state
@@ -113,6 +120,7 @@ function startTrack(curve, summary) {
     tradeCount: 0,
     lastMcap: entry,
     lastCurveSol: summary.netSol,
+    entryDelayed: null,   // price BC_ENTRY_DELAY_MS after alert (fill-latency realism)
   };
   tracks.set(curve.mint, t);
   db.prepare(`
@@ -129,6 +137,8 @@ function updateTrack(mint, mcapSol, curveSol) {
   t.tradeCount += 1;
   t.lastMcap = mcapSol;
   if (curveSol !== undefined && curveSol !== null) t.lastCurveSol = curveSol;
+  // First trade at/after the fill-latency window fixes our realistic entry price.
+  if (t.entryDelayed === null && now() - t.alertAt >= ENTRY_DELAY_MS) t.entryDelayed = mcapSol;
   if (mcapSol > t.peak) t.peak = mcapSol;
   const retFromEntry = (mcapSol / t.entryMcap - 1) * 100;
   // SL from entry
@@ -151,10 +161,10 @@ function persistTrack(t, reason = null) {
     UPDATE bc_tracks SET
       peak_mcap_sol=?, peak_ret_pct=?, sl_ret_pct=?,
       trail20_ret_pct=?, trail30_ret_pct=?, trail40_ret_pct=?,
-      graduated=?, trade_count=?, last_mcap_sol=?, last_at_ms=?, last_curve_sol=?, ended_reason=?
+      graduated=?, trade_count=?, last_mcap_sol=?, last_at_ms=?, last_curve_sol=?, entry_delayed_mcap_sol=?, ended_reason=?
     WHERE mint=?
   `).run(t.peak, peakRet, t.slRet, t.trailRet[20], t.trailRet[30], t.trailRet[40],
-    t.graduated ? 1 : 0, t.tradeCount, t.lastMcap, now(), t.lastCurveSol ?? null, reason, t.mint);
+    t.graduated ? 1 : 0, t.tradeCount, t.lastMcap, now(), t.lastCurveSol ?? null, t.entryDelayed ?? null, reason, t.mint);
 }
 
 function endTrack(mint, reason) {
