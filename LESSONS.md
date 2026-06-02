@@ -197,6 +197,15 @@ Validated `bc_tracks` netSol≥20 at n=38 clean ended tracks (up from 27), pre-c
 - **The wall:** "signal validated" ≠ "tradeable." Executing early entry needs on-bonding-curve BUY code that does not exist (buying only at graduation throws away the edge). That execution gap — not signal quality — is the next obstacle, and the only one now worth building toward.
 - **Infra:** ran on Helius mentions mode (~24 GB/day, ~8× lighter than the FluxRPC firehose that died), with the now-restart-safe auto-stop (DB row-count + persisted deadline) — confirmed working: it fired immediately on a reboot when the DB already held 55≥45. Credits bounded, key healthy. The L20/L21 drain pattern is fixed.
 
+## L26. PRE-COMMITTED latency gate (written before the data, autonomous mode). (2026-06-01)
+Running a bounded collection of entry-latency-aware BC tracks (`entry_delayed_mcap_sol` = price ~5s after alert). A netSol≥20 alert means the token already pulled 20+ SOL, so the price 5s later may be +15–40% above alert — this gate can legitimately flip PF 1.66 to <1.0, and that is the point. **Kill line, fixed now so it can't be rationalized post-hoc:**
+- Metric: **trail30**, charging **entry-slip** (delayed/instant − 1) **+ 6% round-trip cost** + depth-aware loss haircut, on **n≥30 latency-aware netSol≥20 tracks**.
+- **GO** (build Phase 2 dry-run execution) only if **PF > 1.0x net AND avg > 0**.
+- **0.85–1.0x** → inconclusive, collect more, do NOT build.
+- **< 0.85x** → the edge was a measurement artifact (fill latency eats it) → STOP, do not build on-curve execution.
+- Required reporting at re-gate: count of tracks with NULL `entry_delayed` (tokens that died/graduated inside 5s) and the explicit decision to drop/keep them; and a plain statement that the entry-slip haircut is an approximation (it does not fully re-baseline the trail/SL path) — adequate for go/no-go only.
+- Autonomous-mode hard stops (do NOT cross without the user): any paid subscription ($49 RPC), any live real-money trade, any new unbounded firehose.
+
 ## Pre-conditions for the next optimization attempt
 
 1. Expand `snapshot_json` capture: ✅ DONE (entrySignals block, commit b82c4e9).
