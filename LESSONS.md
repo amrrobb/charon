@@ -231,6 +231,14 @@ Trench *trading* is not doable with anything reachable from this client:
 - Early-entry / bonding-curve front-running (netSol≥20): signal is real for *graduation* (8× lift) but the trade is −EV once you charge realistic fill latency — you cannot buy the winners at alert price.
 The edge isn't mis-selected — it's absent at this latency tier (30s poll / post-detection fill) in a 98.6%-rug, negative-sum arena. The durable money is the house and block-time insiders, not the follower. Next move is a real pivot (stop trading / different game), not another trading iteration.
 
+## L29. Launcher hypothesis tested (economics model): −EV without distribution. (2026-06-03)
+Tested "be the house / pump.fun creator (fee collection)" via a transparent EV model (scripts/.. ad-hoc; fee 0.95% of volume, cost ~0.07 SOL/launch, fee|grad ≈$323 @200 SOL vol, fee|tracked ≈$42, grounded in our 2,525 tracks' 2.7% tracked-cohort graduation + public base rates). Result:
+- **−EV at base rates:** P(grad)~0.5–1.15% (pump.fun base) → −$7 to −$9/launch (−$20–27K/mo @100 launches/day).
+- **Break-even needs P(grad) ≥ 2.6%** (2.5–5× base), OR ~3× higher fees-per-graduate.
+- The ONLY lever to lift your tokens above base = **distribution (an audience that buys what you launch)** — and research shows bot-launched tokens graduate LESS (artificial volume detected), so pure automation pushes you BELOW base.
+- **Same structural verdict as trading:** engineering is the easy part; the edge is owned elsewhere. Trading → speed/order-flow (insiders). Launching → attention (audiences). Code can't manufacture attention; automation damages it.
+- Conclusion: launching is +EV ONLY with pre-existing distribution. That's a marketing/community asset, not an engineering one — out of scope for a code-built bot. Model is sensitive to fees-per-graduate; qualitative conclusion (distribution is the binding constraint) is robust.
+
 ## Pre-conditions for the next optimization attempt
 
 1. Expand `snapshot_json` capture: ✅ DONE (entrySignals block, commit b82c4e9).
