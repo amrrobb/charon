@@ -54,6 +54,13 @@ try { db.exec('ALTER TABLE bc_tracks ADD COLUMN last_curve_sol REAL'); } catch {
 // analysis can charge that entry-slip and test whether the edge survives
 // realistic fill latency (the go/no-go before building live execution).
 try { db.exec('ALTER TABLE bc_tracks ADD COLUMN entry_delayed_mcap_sol REAL'); } catch { /* column exists */ }
+// Delayed-entry RE-SIMULATION (L27): a second virtual position that ENTERS at the
+// realistic delayed fill price and runs its OWN peak/SL/trail re-based from there —
+// the only honest way to settle the latency bracket [0.57, 2.79]. These returns are
+// measured relative to entry_delayed_mcap_sol, not the instant alert price.
+for (const col of ['delayed_sl_ret_pct','delayed_trail20_ret_pct','delayed_trail30_ret_pct','delayed_trail40_ret_pct','delayed_peak_ret_pct']) {
+  try { db.exec(`ALTER TABLE bc_tracks ADD COLUMN ${col} REAL`); } catch { /* exists */ }
+}
 
 const TRACK_NET_SOL = Number(process.env.BC_TRACK_NET_SOL || 20);
 const ENTRY_DELAY_MS = Number(process.env.BC_ENTRY_DELAY_MS || 5000);
@@ -121,6 +128,9 @@ function startTrack(curve, summary) {
     lastMcap: entry,
     lastCurveSol: summary.netSol,
     entryDelayed: null,   // price BC_ENTRY_DELAY_MS after alert (fill-latency realism)
+    delayedPeak: null,    // delayed-entry re-sim: peak observed AFTER the delayed fill
+    delayedSlRet: null,
+    delayedTrailRet: { 20: null, 30: null, 40: null },
   };
   tracks.set(curve.mint, t);
   db.prepare(`
@@ -139,6 +149,20 @@ function updateTrack(mint, mcapSol, curveSol) {
   if (curveSol !== undefined && curveSol !== null) t.lastCurveSol = curveSol;
   // First trade at/after the fill-latency window fixes our realistic entry price.
   if (t.entryDelayed === null && now() - t.alertAt >= ENTRY_DELAY_MS) t.entryDelayed = mcapSol;
+  // Delayed-entry RE-SIM: once filled, run a position re-based at entry_delayed with
+  // its OWN peak/SL/trail. Removes both estimator biases (L27) — exact, not approximate.
+  if (t.entryDelayed !== null) {
+    if (t.delayedPeak === null) t.delayedPeak = t.entryDelayed; // first post-fill obs = our entry
+    if (mcapSol > t.delayedPeak) t.delayedPeak = mcapSol;
+    const dRet = (mcapSol / t.entryDelayed - 1) * 100;
+    if (t.delayedSlRet === null && dRet <= SL_PCT) t.delayedSlRet = dRet;
+    for (const trail of TRAILS) {
+      if (t.delayedTrailRet[trail] === null && t.delayedPeak > t.entryDelayed) {
+        const drop = (mcapSol / t.delayedPeak - 1) * 100;
+        if (drop <= -trail) t.delayedTrailRet[trail] = dRet;
+      }
+    }
+  }
   if (mcapSol > t.peak) t.peak = mcapSol;
   const retFromEntry = (mcapSol / t.entryMcap - 1) * 100;
   // SL from entry
@@ -161,10 +185,15 @@ function persistTrack(t, reason = null) {
     UPDATE bc_tracks SET
       peak_mcap_sol=?, peak_ret_pct=?, sl_ret_pct=?,
       trail20_ret_pct=?, trail30_ret_pct=?, trail40_ret_pct=?,
-      graduated=?, trade_count=?, last_mcap_sol=?, last_at_ms=?, last_curve_sol=?, entry_delayed_mcap_sol=?, ended_reason=?
+      graduated=?, trade_count=?, last_mcap_sol=?, last_at_ms=?, last_curve_sol=?, entry_delayed_mcap_sol=?,
+      delayed_sl_ret_pct=?, delayed_trail20_ret_pct=?, delayed_trail30_ret_pct=?, delayed_trail40_ret_pct=?, delayed_peak_ret_pct=?,
+      ended_reason=?
     WHERE mint=?
   `).run(t.peak, peakRet, t.slRet, t.trailRet[20], t.trailRet[30], t.trailRet[40],
-    t.graduated ? 1 : 0, t.tradeCount, t.lastMcap, now(), t.lastCurveSol ?? null, t.entryDelayed ?? null, reason, t.mint);
+    t.graduated ? 1 : 0, t.tradeCount, t.lastMcap, now(), t.lastCurveSol ?? null, t.entryDelayed ?? null,
+    t.delayedSlRet ?? null, t.delayedTrailRet[20], t.delayedTrailRet[30], t.delayedTrailRet[40],
+    (t.entryDelayed && t.delayedPeak) ? (t.delayedPeak / t.entryDelayed - 1) * 100 : null,
+    reason, t.mint);
 }
 
 function endTrack(mint, reason) {
