@@ -216,6 +216,21 @@ Ran the L26 latency gate on n=32 latency-aware netSol≥20 tracks (`entry_delaye
 - **BUT the perfect-fill ceiling is decaying:** instant-entry PF went **1.88 (n=27) → 1.66 (n=38) → 1.15 (n=32)** across samples — the same out-of-sample decay signature that killed degen_filtered (1.15→0.54), sw_v1 (1.17→0.91), favor (+6.6→−4.3). The ceiling is collapsing toward 1.0 *independent of latency*.
 - **Decision (NOT taken autonomously, per L26 hard-stops + L5/L24):** definitively resolving the bracket requires building a delayed-entry RE-SIMULATION (a 2nd virtual position re-based at the fill price with its own trail/SL) + another bounded free re-collect + re-gate (days, more of the free key). And even a GO there lands at the next wall (on-curve execution build + $49 RPC + real-fill dry-run vs block-time snipers). "Collect one more cycle because it's not definitively dead" is the exact trap this project has repeated — so this is a stop-and-ask. Bot left on `degen_sw_v1`.
 
+## L28. Early-entry edge is DEAD — honest delayed-entry re-sim settles it. KILL. (2026-06-03)
+Built the delayed-entry re-simulation (2nd virtual position re-based at the realistic fill price, own peak/SL/trail — removes both estimator biases of L27). Collected n=30 ended re-sim tracks (free key, no paid RPC). Decisive result:
+- **ALL netSol≥20, trail30, +6% cost: PF 0.54, avg −9.5%, WR 33% → KILL** (pre-committed bar was PF>1.0x net).
+- Early n=10 peek was PF 1.23 → collapsed to 0.54 at n=30. Same small-sample regression as every prior signal (degen_filtered 1.15→0.54, sw_v1 1.17→0.91, favor +6.6→−4.3, instant-ceiling 1.88→1.66→1.15).
+- The honest re-sim lands the L27 bracket [0.57, 2.79] at the **pessimistic end (~0.54)**. The 1.66/2.79 readings were artifacts of assuming you fill at the alert price — you can't; by the time you'd fill, the fast movers (the lottery tail) have already run.
+- **No token characteristic rescues it** — every segment <1.0x: netSol 20–30 = 0.79 (best), entry-slip 0–15% = 0.73, vel≥500 = 0.63. Sub-selecting doesn't cross break-even.
+- **This is the process working, not failing:** killed the project's last +EV candidate for the cost of a bounded *free* collection, BEFORE building on-curve execution + paying $49 RPC + risking live SOL. That avoided build was the whole point of the discipline.
+
+## TERMINAL CONCLUSION (after ~2,580 trades, 1,680 BC tracks, 28 lessons)
+Trench *trading* is not doable with anything reachable from this client:
+- Late-follower momentum (degen/sniper/smart_money + all 5 entry filters): −EV, proven.
+- LLM screening (sniper): added zero edge vs the crude floor.
+- Early-entry / bonding-curve front-running (netSol≥20): signal is real for *graduation* (8× lift) but the trade is −EV once you charge realistic fill latency — you cannot buy the winners at alert price.
+The edge isn't mis-selected — it's absent at this latency tier (30s poll / post-detection fill) in a 98.6%-rug, negative-sum arena. The durable money is the house and block-time insiders, not the follower. Next move is a real pivot (stop trading / different game), not another trading iteration.
+
 ## Pre-conditions for the next optimization attempt
 
 1. Expand `snapshot_json` capture: ✅ DONE (entrySignals block, commit b82c4e9).
