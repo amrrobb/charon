@@ -239,6 +239,14 @@ Tested "be the house / pump.fun creator (fee collection)" via a transparent EV m
 - **Same structural verdict as trading:** engineering is the easy part; the edge is owned elsewhere. Trading → speed/order-flow (insiders). Launching → attention (audiences). Code can't manufacture attention; automation damages it.
 - Conclusion: launching is +EV ONLY with pre-existing distribution. That's a marketing/community asset, not an engineering one — out of scope for a code-built bot. Model is sensitive to fees-per-graduate; qualitative conclusion (distribution is the binding constraint) is robust.
 
+## L30. Creator (yunus) revealed his method — tested it; mcap insight confirmed, edge is an unobservable filter. (2026-06-03)
+yunus (Charon creator, in the Meridian-Discussion TG) stated his actual live config: enters **7–25k mcap only**, *"above 100k you only get the dump,"* **NO LLM** (*"gapake"*; also notes any LLM adds execution delay), a **brutally strict filter** (*"filternya musti bengis"*), claims **~$2/day minimum, consistent**; top-wins screenshot shows +285/+222/+153% TRAILING_TP from varied mcaps (the lottery tail). Tested against our 2,665 closed trades:
+- **mcap >100k = worst bucket (PF 0.48)** → yunus's "dump above 100k" CONFIRMED in our data. Real, useful.
+- **But 7–25k alone ≠ edge: PF 0.79**, identical to ALL (0.77). Every filter combo on his band stays ~0.79 (sw≥1 → 0.79; ≤25k → 0.79; ≤50k → 0.78). Nothing crosses 1.0.
+- **Corrections to earlier conclusions:** (a) the owner's edge is NOT "sniper+LLM" — he runs **no LLM** (L24's framing of the LLM path as the designed-to-win path is wrong; he deliberately avoids LLM for speed). (b) Our degen's no-LLM choice was actually aligned with him; the miss was max_mcap=100k (too high — should cap ~25–50k).
+- **His claimed edge = the unobservable strict filter + no-LLM execution speed.** We've killed 5 filters OOS; "tight mcap + a strict filter" with anything WE can see stays 0.79. So either his filter uses signal/speed we don't replicate (a follower at 30s-poll can't match block-time-ish entry), or "+$2/day" is marginal/regime/selective (within noise of a ~0.79 lottery; the screenshot shows the tail).
+- **Highest-leverage next move:** the user is IN yunus's TG group — ASK HIM the actual filter. Cheapest path to the real edge vs guessing. Absent that, "tight mcap + strict filter" reduces to the closed filter-graveyard. Free marginal config win regardless: cap degen max_mcap_usd to ~25–50k (drops the 0.48 dump zone).
+
 ## Pre-conditions for the next optimization attempt
 
 1. Expand `snapshot_json` capture: ✅ DONE (entrySignals block, commit b82c4e9).
