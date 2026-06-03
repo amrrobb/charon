@@ -206,6 +206,16 @@ Running a bounded collection of entry-latency-aware BC tracks (`entry_delayed_mc
 - Required reporting at re-gate: count of tracks with NULL `entry_delayed` (tokens that died/graduated inside 5s) and the explicit decision to drop/keep them; and a plain statement that the entry-slip haircut is an approximation (it does not fully re-baseline the trail/SL path) — adequate for go/no-go only.
 - Autonomous-mode hard stops (do NOT cross without the user): any paid subscription ($49 RPC), any live real-money trade, any new unbounded firehose.
 
+## L27. Latency gate: INCONCLUSIVE (not GO, not KILL) — the data can't settle it, so it's a user decision. (2026-06-02)
+Ran the L26 latency gate on n=32 latency-aware netSol≥20 tracks (`entry_delayed` = price ~5s post-alert). It does NOT resolve, because two estimators are oppositely biased and stored data can't break the tie:
+- **Subtract-slip** (charge positive entry-slip off the instant return): **PF 0.57** — but over-penalizes the high-slip winners (the fast movers you fill +30–100% higher; the lottery tail).
+- **Method B / exact re-base** (`exit_mcap/delayed − 1`): **PF 2.79** — but over-credits tokens that *peaked within the 5s window* (their recorded trail exit was computed off the instant-baseline peak, not the post-delayed-entry peak).
+- The advisor's **arming-hybrid was degenerate**: `peak_mcap` is the global max and `entry_delayed` is one sample, so `peak ≥ delayed` is a near-tautology → 0/32 never-armed → it collapses to method B (2.79). No discrimination.
+- **True PF is bracketed [~0.57, ~2.79]** — uselessly wide. Resolving it needs intra-path peak *timing* relative to the 5s mark, which is not stored.
+- **Free diagnostic:** `entry_delayed/peak_mcap` median **0.46** (fills sit well below the peak; 18/32 below half-peak) → leans method-B-defensible / not obviously dead.
+- **BUT the perfect-fill ceiling is decaying:** instant-entry PF went **1.88 (n=27) → 1.66 (n=38) → 1.15 (n=32)** across samples — the same out-of-sample decay signature that killed degen_filtered (1.15→0.54), sw_v1 (1.17→0.91), favor (+6.6→−4.3). The ceiling is collapsing toward 1.0 *independent of latency*.
+- **Decision (NOT taken autonomously, per L26 hard-stops + L5/L24):** definitively resolving the bracket requires building a delayed-entry RE-SIMULATION (a 2nd virtual position re-based at the fill price with its own trail/SL) + another bounded free re-collect + re-gate (days, more of the free key). And even a GO there lands at the next wall (on-curve execution build + $49 RPC + real-fill dry-run vs block-time snipers). "Collect one more cycle because it's not definitively dead" is the exact trap this project has repeated — so this is a stop-and-ask. Bot left on `degen_sw_v1`.
+
 ## Pre-conditions for the next optimization attempt
 
 1. Expand `snapshot_json` capture: ✅ DONE (entrySignals block, commit b82c4e9).
