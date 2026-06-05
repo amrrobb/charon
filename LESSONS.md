@@ -253,7 +253,12 @@ Pulled Meridian's `pool-memory.json` (1,004 closed deploys, 296 pools) to test t
 - **Dry-run by strategy:** `single_sided_reseed` PF **1.58, base 1.47** (NOT outlier-dependent — first such signal in the whole engagement), 77 pools, recency-stable (last 14d PF 1.19, WR 68%). `spot` 1.01. `bid_ask` 0.38 (terrible).
 - **LIVE era (≥2026-05-12, real 0.5 SOL): PF 0.75 — LOSING, ~same as trenches (0.73).** And the profitable dry-run strategy `single_sided_reseed` has **0 live deploys** — Meridian went live on the two WORSE strategies (bid_ask 0.59, spot 0.94) and bled.
 - **Same trap as Charon:** dry-run overstated; the promising-looking strategy was NOT the one run live; live reality is −EV. "DLMM making" broadly is NOT proven profitable for the user.
-- **The one defensible thread:** single-sided / limit-order making (= what the user wants to build) is the strongest, broadest, recency-stable, non-outlier-dependent dry-run signal AND was never live-tested. That's the narrow, honest target — live-validate single-sided/limit-orders specifically (held-out, real costs) BEFORE building anything broad. Don't conclude "DLMM works" from the 1.58.
+- **The one defensible thread:** single-sided / limit-order making (= what the user wants to build). Caveats sharpened by follow-up checks:
+  - **Dry-run is ROUGHLY HONEST here (not the Charon trap):** same-strategy dry→live was STABLE — spot 1.01→0.94, bid_ask 0.38→0.59 (no collapse). So dry-run degrades mildly in DLMM, unlike Charon (1.15→0.54). The 1.58 deserves a real prior, not reflexive dismissal.
+  - **But the 1.58 is pool-concentrated:** 93% of single_sided profit is in 3 of 77 pools; **excluding top-3, PF=1.04** (break-even). 60% of pools net-positive though — so it's "broadly break-even, profit concentrated in a few pools," i.e. the real edge (if any) is POOL SELECTION, not the single-sided mechanic itself — and whether those 3 pools were skill or luck is unproven.
+  - **Live −EV (0.75) is mostly bid_ask (the dog); spot alone is 0.94** — a strategy-SELECTION failure, not proof the house side fails.
+  - Why single_sided wasn't run live = unknown (not in logs).
+  - **Cheapest decisive next test (free, no money):** re-run single_sided in dry-run in the CURRENT June regime, same-period vs concurrently-live spot/bid_ask — kills the staleness confound (its data is Apr3–May10) and tests if the edge + pool-selection reproduce now. Running single_sided LIVE = real 0.5 SOL on the user's other live bot → needs explicit user authorization, not autonomous.
 
 ## Pre-conditions for the next optimization attempt
 
