@@ -260,6 +260,15 @@ Pulled Meridian's `pool-memory.json` (1,004 closed deploys, 296 pools) to test t
   - Why single_sided wasn't run live = unknown (not in logs).
   - **Cheapest decisive next test (free, no money):** re-run single_sided in dry-run in the CURRENT June regime, same-period vs concurrently-live spot/bid_ask — kills the staleness confound (its data is Apr3–May10) and tests if the edge + pool-selection reproduce now. Running single_sided LIVE = real 0.5 SOL on the user's other live bot → needs explicit user authorization, not autonomous.
 
+## L32. Edge-Validation Gauntlet on Meridian DLMM: the FIRST QUALIFIED PASS of the engagement. (2026-06-05)
+Ran the free re-analysis (label-agnostic, ex-ante features, chronological train/test, net-of-cost, pre-committed bar PF>1.2 net) on 1,006 Meridian DLMM deploys. Autonomous, advisor-adversarial (advisor predicted KILL, was disproven honestly, reconciled).
+- **Mechanistic truth (PnL decomposition, n=447 w/ fee data):** total +$45.6 = **fees +$1,050** **+ price/IL −$1,005.** The maker fee engine is strongly +EV; impermanent-loss/inventory drag eats ~100% of it. Lever is LESS IL, not more fees (confirmed: `fee_tvl_ratio` selection did NOT help — chasing fees buys more IL).
+- **Two ex-ante features survived train→test, both IL-minimizers (mechanistically coherent):** `volume_at_deploy < 1687` (TRAIN 1.09 → TEST 1.42 gross, WR 70%) and `volatility_at_deploy < 1.95` (TEST 7.73 gross but outlier-y). Low vol/volume = price doesn't run through the range = keep the fees.
+- **Size-gated, not absent (the key finding):** at current micro-size (~$167/deploy, median pool share 0.07%) fixed gas dominates → net PF ~0.62 at $0.20 gas. The edge clears PF>1.2 net at ~$500–834/deploy (3–5×). **Verdict pivots on real gas:** at likely gas ($0.02–0.05 = refundable position rent + ~$0.001–0.01/tx, mostly clean single closes) it clears 1.2 **at current size**; at pessimistic $0.20–0.35 it needs 5–8×.
+- **Capacity-cap check (advisor's disqualifier) PASSED:** Meridian's 0.07% share is so tiny that fee-saturation doesn't bind until ~40× — peak capacity-respecting net PF 1.26 at k≈8–20, still clears the bar.
+- **Verdict: QUALIFIED PASS — first real OOS edge of the whole engagement** (vs trenches −EV at every size, launcher −EV without distribution). Genuinely different. NOT "green" — three named risks only a **bounded live probe at deliberately-sized positions** can retire: (1) extrapolation beyond observed 0.07%-share/1×-size; (2) real gas per deploy (load-bearing, unmeasured); (3) **IL likely super-scales at size** (bigger position = more of the book = worse exit slippage + self-impacting reseeds) — the one thing 0.07%-share data structurally cannot show.
+- **Recommendation = a bounded live probe** (low-vol + low-volume pools, deliberately sized ~$500–1000/deploy, measure real gas + IL-at-size + dry-vs-live), with a pre-committed kill if live net PF < 1.0. That's real money → USER decision + spend, not autonomous.
+
 ## Pre-conditions for the next optimization attempt
 
 1. Expand `snapshot_json` capture: ✅ DONE (entrySignals block, commit b82c4e9).
