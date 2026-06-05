@@ -247,6 +247,14 @@ yunus (Charon creator, in the Meridian-Discussion TG) stated his actual live con
 - **His claimed edge = the unobservable strict filter + no-LLM execution speed.** We've killed 5 filters OOS; "tight mcap + a strict filter" with anything WE can see stays 0.79. So either his filter uses signal/speed we don't replicate (a follower at 30s-poll can't match block-time-ish entry), or "+$2/day" is marginal/regime/selective (within noise of a ~0.79 lottery; the screenshot shows the tail).
 - **Highest-leverage next move:** the user is IN yunus's TG group — ASK HIM the actual filter. Cheapest path to the real edge vs guessing. Absent that, "tight mcap + strict filter" reduces to the closed filter-graveyard. Free marginal config win regardless: cap degen max_mcap_usd to ~25–50k (drops the 0.48 dump zone).
 
+## L31. Meridian DLMM track record analyzed — single-sided (≈limit orders) is the one promising-but-live-untested thread. (2026-06-05)
+Pulled Meridian's `pool-memory.json` (1,004 closed deploys, 296 pools) to test the DLMM "house side" the user wants to pivot to.
+- **Shape is fundamentally better than trenches:** WR 59–69% (vs 27%), and the failure mode is INVERTED — high win rate, occasional big *losses* (worst −$227), not lottery-tail. Overall dry-run PF 0.98.
+- **Dry-run by strategy:** `single_sided_reseed` PF **1.58, base 1.47** (NOT outlier-dependent — first such signal in the whole engagement), 77 pools, recency-stable (last 14d PF 1.19, WR 68%). `spot` 1.01. `bid_ask` 0.38 (terrible).
+- **LIVE era (≥2026-05-12, real 0.5 SOL): PF 0.75 — LOSING, ~same as trenches (0.73).** And the profitable dry-run strategy `single_sided_reseed` has **0 live deploys** — Meridian went live on the two WORSE strategies (bid_ask 0.59, spot 0.94) and bled.
+- **Same trap as Charon:** dry-run overstated; the promising-looking strategy was NOT the one run live; live reality is −EV. "DLMM making" broadly is NOT proven profitable for the user.
+- **The one defensible thread:** single-sided / limit-order making (= what the user wants to build) is the strongest, broadest, recency-stable, non-outlier-dependent dry-run signal AND was never live-tested. That's the narrow, honest target — live-validate single-sided/limit-orders specifically (held-out, real costs) BEFORE building anything broad. Don't conclude "DLMM works" from the 1.58.
+
 ## Pre-conditions for the next optimization attempt
 
 1. Expand `snapshot_json` capture: ✅ DONE (entrySignals block, commit b82c4e9).
