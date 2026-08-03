@@ -37,6 +37,7 @@ export function filterCandidate(candidate) {
   const savedCount = candidate.savedWalletExposure.holderCount;
   const feeSol = candidate.feeClaim?.distributedSol;
   const holderCount = Number(candidate.metrics.holderCount || 0);
+  const liquidityUsd = Number(candidate.metrics.liquidityUsd || 0);
   const trendingVolume = Number(candidate.trending?.volume ?? 0);
   const trendingSwaps = Number(candidate.trending?.swaps ?? 0);
   const rugRatio = Number(candidate.trending?.rug_ratio ?? 0);
@@ -58,6 +59,18 @@ export function filterCandidate(candidate) {
   }
   if (strat.max_mcap_usd > 0 && Number.isFinite(mcap) && mcap > strat.max_mcap_usd) {
     failures.push(`market cap max: ${mcap} > ${strat.max_mcap_usd}`);
+  }
+
+  // Minimum DEX liquidity (2026-08-03). Backtest over 5,322 closed degen_sw_v1
+  // positions found liquidity is the only monotonic entry discriminator measured:
+  // WR climbs 20.5% (<$5k) -> 25.1% ($5-10k) -> 26.1% ($10-15k) -> 32.7% ($20k+),
+  // and the $5-10k bucket alone carries -9.04 SOL of the -14.2 SOL book.
+  // Independently matches the `liquidityUsd >= 13000` threshold Kaiser's own
+  // split-half backtest landed on (BACKTEST_EDGE_2026-07-07.md).
+  // Missing/zero liquidity is treated as a REJECT, not a pass — a candidate we
+  // cannot price the depth of is exactly the one this gate exists to block.
+  if (strat.min_liquidity_usd > 0 && !(liquidityUsd >= strat.min_liquidity_usd)) {
+    failures.push(`liquidity: ${liquidityUsd} < ${strat.min_liquidity_usd}`);
   }
 
   // GMGN fees — only enforce when GMGN data is available; Jupiter has no equivalent
